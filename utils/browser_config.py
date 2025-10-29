@@ -4,7 +4,15 @@ Legal approaches to minimize reCAPTCHA triggers for automated testing
 """
 import json
 from typing import Optional, Dict, Any
-from playwright.sync_api import Browser, BrowserContext, Page
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class StealthBrowserConfig:
     """
-    Creates a browser context that mimics real user behavior
+    Creates a browser configuration that mimics real user behavior
     to reduce reCAPTCHA triggers legally
     """
 
@@ -31,91 +39,89 @@ class StealthBrowserConfig:
         return {"width": 1920, "height": 1080}
 
     @staticmethod
-    def get_context_options() -> Dict[str, Any]:
+    def get_chrome_options() -> Options:
         """
-        Return browser context options that make automation look more human
+        Return Chrome options that make automation look more human
 
         Legal approach: Configure browser to behave like a real user
-        - Realistic user agent
-        - Common screen resolution
-        - Proper locale and timezone
-        - Accept language headers
         """
-        return {
-            "user_agent": StealthBrowserConfig.get_realistic_user_agent(),
-            "viewport": StealthBrowserConfig.get_realistic_viewport(),
-            "locale": "en-US",
-            "timezone_id": "America/New_York",
-            "geolocation": {"longitude": -74.006, "latitude": 40.7128},  # New York
-            "permissions": ["geolocation"],
-            "color_scheme": "light",
-            "has_touch": False,
-            "is_mobile": False,
-            "device_scale_factor": 1,
-            "extra_http_headers": {
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
+        options = Options()
+
+        # Set user agent
+        options.add_argument(f'user-agent={StealthBrowserConfig.get_realistic_user_agent()}')
+
+        # Set window size
+        viewport = StealthBrowserConfig.get_realistic_viewport()
+        options.add_argument(f'window-size={viewport["width"]},{viewport["height"]}')
+
+        # Additional stealth settings
+        options.add_argument('--disable-blink-features=AutomationControlled')
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+
+        # Set geolocation (New York)
+        prefs = {
+            'profile.default_content_setting_values.geolocation': 1,
+            'profile.default_content_settings.geolocation': 1,
+            'profile.content_settings.exceptions.geolocation[*]': {
+                'setting': 1
             }
         }
+        options.add_experimental_option('prefs', prefs)
+
+        return options
 
     @staticmethod
-    def get_stealth_scripts() -> list[str]:
+    def create_stealth_driver() -> WebDriver:
         """
-        Return JavaScript to inject that makes automation less detectable
+        Create a WebDriver instance with stealth configuration
 
-        Legal approach: Override automation-specific properties
-        These are standard stealth techniques used in legitimate testing
+        Returns:
+            Configured WebDriver instance
         """
-        return [
-            # Override navigator.webdriver (only once)
+        logger.info("Creating stealth browser configuration...")
+
+        options = StealthBrowserConfig.get_chrome_options()
+        driver = webdriver.Chrome(options=options)
+
+        # Execute stealth scripts
+        StealthBrowserConfig.inject_stealth_scripts(driver)
+
+        logger.info("✓ Stealth browser created")
+        return driver
+
+    @staticmethod
+    def inject_stealth_scripts(driver: WebDriver) -> None:
+        """
+        Inject JavaScript to make automation less detectable
+
+        Args:
+            driver: WebDriver instance
+        """
+        scripts = [
+            # Override navigator.webdriver
             """
-            try {
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
-            } catch(e) {
-                // Already defined
-            }
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
             """,
 
-            # Add realistic plugins
+            # Add plugins
             """
-            try {
-                Object.defineProperty(navigator, 'plugins', {
+            Object.defineProperty(navigator, 'plugins', {
                 get: () => [
                     {
-                        0: {type: "application/pdf", suffixes: "pdf", description: "Portable Document Format"},
+                        0: {type: "application/pdf"},
                         description: "Portable Document Format",
                         filename: "internal-pdf-viewer",
                         length: 1,
                         name: "Chrome PDF Plugin"
-                    },
-                    {
-                        0: {type: "application/x-google-chrome-pdf", suffixes: "pdf", description: "Portable Document Format"},
-                        description: "Portable Document Format",
-                        filename: "internal-pdf-viewer",
-                        length: 1,
-                        name: "Chrome PDF Viewer"
-                    },
-                    {
-                        description: "Native Client Executable",
-                        filename: "internal-nacl-plugin",
-                        length: 2,
-                        name: "Native Client"
                     }
                 ]
             });
-            } catch(e) { /* Already defined */ }
             """,
 
-            # Add chrome property
+            # Add chrome object
             """
             window.chrome = {
                 runtime: {},
@@ -123,174 +129,64 @@ class StealthBrowserConfig:
                 csi: function() {},
                 app: {}
             };
-            """,
-
-            # Mock languages
             """
-            try {
-                Object.defineProperty(navigator, 'languages', {
-                get: () => ['en187', 'en']
-            });
-            } catch(e) { /* Already defined */ }
-            """,
-            
-            # Hide automation indicators
-            """
-            Object.defineProperty(navigator, 'hardwareConcurrency', {
-                get: () => 8
-            });
-            } catch(e) { /* Already defined */ }
-            """,
-            
-            # Mock device memory
-            """
-            Object.defineProperty(navigator, 'deviceMemory', {
-                get: () => 8
-            });
-            } catch(e) { /* Already defined */ }
-            """,
-            
-            # Override permission prompts
-            """
-            try {
-                const originalQuery = window.navigator.permissions.query;
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
-                    parameters.name === 'geolocation' ?
-                    Promise.resolve({ state: 'granted' }) :
-                    originalQuery(parameters)
-            );
-            """,
         ]
 
-    @staticmethod
-    def create_stealth_context(browser: Browser) -> BrowserContext:
-        """
-        Create a browser context with stealth configuration
-
-        Args:
-            browser: Playwright browser instance
-
-        Returns:
-            Configured browser context
-        """
-        logger.info("Creating stealth browser context...")
-
-        context = browser.new_context(**StealthBrowserConfig.get_context_options())
-
-        # Add init scripts to every page in this context
-        for script in StealthBrowserConfig.get_stealth_scripts():
-            context.add_init_script(script)
-
-        logger.info("✓ Stealth context created")
-        return context
-
-    @staticmethod
-    def create_stealth_page(context: BrowserContext) -> Page:
-        """
-        Create a page with additional human-like behaviors
-
-        Args:
-            context: Browser context
-
-        Returns:
-            Page object
-        """
-        page = context.new_page()
-
-        # Set additional page properties
-        page.set_extra_http_headers({
-            "DNT": "1",  # Do Not Track
-            "Sec-CH-UA": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            "Sec-CH-UA-Mobile": "?0",
-            "Sec-CH-UA-Platform": '"macOS"',
-        })
-
-        logger.info("✓ Stealth page created")
-        return page
+        for script in scripts:
+            driver.execute_script(script)
 
 
 class HumanBehaviorSimulator:
     """
     Simulate human-like interactions to reduce bot detection
-    Legal approach: Make automation behave like a real user
     """
 
     @staticmethod
-    def human_type(page: Page, selector: str, text: str, delay_ms: int = 100):
+    def human_type(driver: WebDriver, selector: str, text: str, delay_ms: int = 100):
         """
         Type text with human-like delays between characters
-
-        Args:
-            page: Playwright page
-            selector: Element selector
-            text: Text to type
-            delay_ms: Delay between keystrokes in milliseconds
         """
         logger.info(f"Typing with human-like delays: {text[:50]}...")
-        element = page.locator(selector).first
+        element = driver.find_element(By.CSS_SELECTOR, selector)
 
         # Click with slight delay
         element.click()
-        page.wait_for_timeout(300)
+        time.sleep(0.3)
 
-        # Type character by character with random-ish delays
+        # Type character by character
         for i, char in enumerate(text):
-            element.type(char, delay=delay_ms + (i % 30))  # Slight variation
+            element.send_keys(char)
+            time.sleep((delay_ms + (i % 30)) / 1000)
 
         logger.info("✓ Human-like typing completed")
 
     @staticmethod
-    def human_mouse_move(page: Page, x: int, y: int):
+    def human_mouse_move(driver: WebDriver, element) -> None:
         """
-        Move mouse in a human-like curved path
-
-        Args:
-            page: Playwright page
-            x: Target X coordinate
-            y: Target Y coordinate
+        Move mouse to element in a human-like way
         """
-        # Get current mouse position (approximate)
-        # Move in small steps to simulate human movement
-        page.mouse.move(x, y, steps=10)
-        logger.debug(f"Mouse moved to ({x}, {y})")
+        actions = ActionChains(driver)
+        actions.move_to_element(element)
+        actions.perform()
+        time.sleep(0.2)
 
     @staticmethod
-    def random_scroll(page: Page):
+    def random_scroll(driver: WebDriver):
         """
         Scroll page randomly to simulate reading behavior
-
-        Args:
-            page: Playwright page
         """
         logger.info("Simulating human scroll behavior...")
 
-        # Scroll down a bit
-        page.evaluate("window.scrollBy(0, 300)")
-        page.wait_for_timeout(500)
+        driver.execute_script("window.scrollBy(0, 300)")
+        time.sleep(0.5)
 
-        # Scroll up a bit (like user is reading)
-        page.evaluate("window.scrollBy(0, -100)")
-        page.wait_for_timeout(300)
+        driver.execute_script("window.scrollBy(0, -100)")
+        time.sleep(0.3)
 
-        # Scroll back to top
-        page.evaluate("window.scrollTo(0, 0)")
-        page.wait_for_timeout(200)
+        driver.execute_script("window.scrollTo(0, 0)")
+        time.sleep(0.2)
 
         logger.info("✓ Scroll simulation completed")
-
-    @staticmethod
-    def pause_like_reading(page: Page, duration_ms: int = 2000):
-        """
-        Pause as if user is reading content
-
-        Args:
-            page: Playwright page
-            duration_ms: Duration in milliseconds
-        """
-        logger.debug(f"Pausing {duration_ms}ms (simulating reading)...")
-        page.wait_for_timeout(duration_ms)
 
 
 class RecaptchaHelper:
@@ -299,26 +195,17 @@ class RecaptchaHelper:
     """
 
     @staticmethod
-    def wait_for_human_solve(page: Page, timeout_ms: int = 120000) -> bool:
+    def wait_for_human_solve(driver: WebDriver, timeout_ms: int = 120000) -> bool:
         """
         Legal approach: Pause automation and let human solve reCAPTCHA
-        Useful for manual test runs or development
-
-        Args:
-            page: Playwright page
-            timeout_ms: Max time to wait
-
-        Returns:
-            True if solved, False if timeout
         """
         logger.warning("⏸️  reCAPTCHA DETECTED - Please solve manually")
         logger.warning("⏸️  Waiting up to 120 seconds for human intervention...")
 
         try:
-            # Wait for reCAPTCHA iframe to disappear
-            page.locator("iframe[src*='recaptcha']").first.wait_for(
-                state="hidden",
-                timeout=timeout_ms
+            wait = WebDriverWait(driver, timeout_ms/1000)
+            wait.until_not(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "iframe[src*='recaptcha']"))
             )
             logger.info("✓ reCAPTCHA solved! Continuing automation...")
             return True
@@ -327,132 +214,59 @@ class RecaptchaHelper:
             return False
 
     @staticmethod
-    def is_recaptcha_present(page: Page) -> bool:
-        """
-        Check if reCAPTCHA is currently visible
-
-        Args:
-            page: Playwright page
-
-        Returns:
-            True if reCAPTCHA is visible
-        """
+    def is_recaptcha_present(driver: WebDriver) -> bool:
+        """Check if reCAPTCHA is currently visible"""
         try:
-            recaptcha = page.locator("iframe[src*='recaptcha']").first
-            return recaptcha.is_visible(timeout=2000)
+            return len(driver.find_elements(By.CSS_SELECTOR, "iframe[src*='recaptcha']")) > 0
         except:
             return False
 
     @staticmethod
-    def use_saved_session(context: BrowserContext, session_file: str):
-        """
-        Legal approach: Reuse authenticated session from real user
-
-        This is the BEST approach for testing:
-        1. Manually login once and save session
-        2. Reuse session for all automated tests
-        3. reCAPTCHA trusts the session
-
-        Args:
-            context: Browser context
-            session_file: Path to saved session JSON
-        """
-        logger.info(f"Loading session from {session_file}...")
+    def load_cookies(driver: WebDriver, session_file: str) -> bool:
+        """Load saved cookies from file"""
+        logger.info(f"Loading cookies from {session_file}...")
 
         try:
             with open(session_file, 'r') as f:
-                session_data = json.load(f)
+                cookies = json.load(f)
 
-            # Prepare storage state for context
-            storage_state = {
-                "cookies": session_data.get('cookies', []),
-                "origins": session_data.get('storage', {}).get('local_storage', [])
-            }
-            
-            logger.info(f"✓ Prepared storage state: {len(storage_state['cookies'])} cookies, {len(storage_state['origins'])} origins")
+            for cookie in cookies:
+                driver.add_cookie(cookie)
 
-            # Save current context
-            context.close()
-            
-            # Create new context with storage state
-            new_context = context.browser.new_context(
-                storage_state=storage_state
-            )
-            
-            # Copy to original context reference
-            context = new_context
-            
-            logger.info(f"✓ Loaded {len(storage_state['cookies'])} domains with localStorage")
-            logger.info("✓ Session loaded successfully")
+            logger.info(f"✓ Loaded {len(cookies)} cookies")
             return True
-
         except Exception as e:
-            logger.error(f"✗ Could not load session: {e}")
+            logger.error(f"✗ Could not load cookies: {e}")
             return False
 
     @staticmethod
-    def save_session(page: Page, session_file: str):
-        """
-        Save current session for reuse
+    def save_cookies(driver: WebDriver, session_file: str):
+        """Save current cookies to file"""
+        logger.info(f"Saving cookies to {session_file}...")
 
-        Run this once manually after solving reCAPTCHA:
-        1. Start browser
-        2. Manually interact and solve reCAPTCHA
-        3. Call this method to save session
-        4. Reuse session in all future tests
-
-        Args:
-            page: Playwright page
-            session_file: Path to save session JSON
-        """
-        logger.info(f"Saving session to {session_file}...")
-
-        session_data = {
-            'cookies': page.context.cookies(),
-            'localStorage': page.evaluate('() => Object.entries(localStorage)'),
-            'url': page.url
-        }
-
+        cookies = driver.get_cookies()
         with open(session_file, 'w') as f:
-            json.dump(session_data, f, indent=2)
+            json.dump(cookies, f, indent=2)
 
-        logger.info(f"✓ Session saved ({len(session_data['cookies'])} cookies)")
-        logger.info(f"✓ Reuse this session to bypass reCAPTCHA in future tests")
+        logger.info(f"✓ Saved {len(cookies)} cookies")
 
 
-def create_optimal_test_browser(browser: Browser, session_file: Optional[str] = None) -> tuple[BrowserContext, Page]:
+def create_optimal_test_browser(session_file: Optional[str] = None) -> WebDriver:
     """
-    Create optimally configured browser for testing with minimal reCAPTCHA triggers
-
-    Combines multiple legal techniques:
-    1. Stealth configuration
-    2. Session reuse (if available)
-    3. Human-like behavior simulation
-
-    Args:
-        browser: Playwright browser
-        session_file: Optional path to saved session
-
-    Returns:
-        Tuple of (context, page)
+    Create optimally configured browser for testing
     """
     logger.info("🔧 Creating optimal test browser...")
 
-    # Create stealth context
-    context = StealthBrowserConfig.create_stealth_context(browser)
+    driver = StealthBrowserConfig.create_stealth_driver()
 
-    # Load saved session if available
     if session_file:
-        RecaptchaHelper.use_saved_session(context, session_file)
-
-    # Create stealth page
-    page = StealthBrowserConfig.create_stealth_page(context)
+        RecaptchaHelper.load_cookies(driver, session_file)
 
     logger.info("✅ Optimal test browser ready!")
     logger.info("📌 Tips:")
     logger.info("   - Use HumanBehaviorSimulator for interactions")
-    logger.info("   - Add pauses between actions (1-3 seconds)")
+    logger.info("   - Add pauses between actions")
     logger.info("   - Scroll and move mouse naturally")
-    logger.info("   - Save session after first successful run")
+    logger.info("   - Save cookies after first successful run")
 
-    return context, page
+    return driver

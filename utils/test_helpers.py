@@ -4,7 +4,8 @@ Test helper utilities
 import json
 import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
+from selenium.common.exceptions import WebDriverException
 from config import DATA_DIR, SCREENSHOTS_DIR, TEST_DATA_FILE
 import logging
 
@@ -172,10 +173,10 @@ class ReportHelper:
 
 
 def wait_with_retry(
-    func,
+    func: Callable,
     max_retries: int = 3,
     delay: int = 2,
-    exceptions: tuple = (Exception,)
+    exceptions: tuple = (WebDriverException,)  # Updated for Selenium
 ) -> Any:
     """
     Execute function with retry logic
@@ -184,7 +185,7 @@ def wait_with_retry(
         func: Function to execute
         max_retries: Maximum retry attempts
         delay: Delay between retries in seconds
-        exceptions: Tuple of exceptions to catch
+        exceptions: Tuple of exceptions to catch (defaults to Selenium's WebDriverException)
 
     Returns:
         Function result

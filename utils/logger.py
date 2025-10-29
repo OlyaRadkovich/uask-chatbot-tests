@@ -46,10 +46,26 @@ def setup_logger(name: str = __name__, level: str = None) -> logging.Logger:
         '%(levelname)-8s | %(message)s'
     )
 
+    # Enhanced file format for Selenium debugging
     file_format = logging.Formatter(
-        '%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s',
+        '%(asctime)s | %(name)-20s | %(levelname)-8s | '
+        '%(message)s'
+        '%(webdriver_commands)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
+
+    # Add custom filter for WebDriver commands
+    class WebDriverFilter(logging.Filter):
+        def filter(self, record):
+            record.webdriver_commands = (
+                f' | {record.args}' if (
+                    'selenium.webdriver' in record.name
+                    and record.levelno == logging.DEBUG
+                ) else ''
+            )
+            return True
+
+    file_handler.addFilter(WebDriverFilter())
 
     console_handler.setFormatter(console_format)
     file_handler.setFormatter(file_format)
@@ -57,6 +73,10 @@ def setup_logger(name: str = __name__, level: str = None) -> logging.Logger:
     # Add handlers
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
+
+    # Set selenium logger level
+    selenium_logger = logging.getLogger('selenium')
+    selenium_logger.setLevel(logging.WARNING)  # Reduce Selenium's verbose logging
 
     return logger
 

@@ -3,7 +3,13 @@ Pytest configuration and fixtures
 """
 import pytest
 import logging
-from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 from pathlib import Path
 from typing import Generator
 
@@ -28,7 +34,7 @@ def pytest_addoption(parser):
         "--browser",
         action="store",
         default=BrowserConfig.BROWSER_TYPE,
-        help="Browser to use: chromium, firefox, or webkit"
+        help="Browser to use: chrome or firefox"
     )
     parser.addoption(
         "--headless",
@@ -42,312 +48,139 @@ def pytest_addoption(parser):
         default=TestConfig.DEFAULT_LANGUAGE,
         help="Test language: en or ar"
     )
-    parser.addoption(
-        "--slow-mo",
-        action="store",
-        type=int,
-        default=BrowserConfig.SLOW_MO,
-        help="Slow down operations by N milliseconds"
-    )
-    parser.addoption(
-        "--stealth",
-        action="store_true",
-        default=False,
-        help="Enable stealth mode to bypass CAPTCHA (requires browser_config.py)"
-    )
-    parser.addoption(
-        "--session-file",
-        action="store",
-        default=None,
-        help="Path to saved session file for CAPTCHA bypass"
-    )
 
 
 @pytest.fixture(scope="session")
-def browser_type(request):
+def browser_type(request) -> str:
     """Get browser type from command line"""
-    return request.config.getoption("--browser")
+    return request.config.getoption("--browser").lower()
 
 
 @pytest.fixture(scope="session")
-def headless(request):
+def is_headless(request) -> bool:
     """Get headless mode from command line"""
     return request.config.getoption("--headless")
 
 
-@pytest.fixture(scope="session")
-def test_language(request):
-    """Get test language from command line"""
-    return request.config.getoption("--language")
-
-
-@pytest.fixture(scope="session")
-def slow_mo(request):
-    """Get slow-mo value from command line"""
-    return request.config.getoption("--slow-mo")
-
-
-@pytest.fixture(scope="session")
-def playwright():
-    """Playwright instance - session scoped"""
-    with sync_playwright() as p:
-        logger.info("Starting Playwright")
-        yield p
-        logger.info("Stopping Playwright")
-
-
-@pytest.fixture(scope="session")
-def browser(playwright, browser_type, headless, slow_mo) -> Generator[Browser, None, None]:
-    """
-    Browser instance - session scoped
-    Reused across all tests for better performance
-    """
-    logger.info(f"Launching {browser_type} browser (headless={headless})")
-
-    browser_types = {
-        "chromium": playwright.chromium,
-        "firefox": playwright.firefox,
-        "webkit": playwright.webkit
-    }
-
-    browser_launcher = browser_types.get(browser_type, playwright.chromium)
-
-    browser = browser_launcher.launch(
-        headless=headless,
-        slow_mo=slow_mo
-    )
-
-    yield browser
-
-    logger.info("Closing browser")
-    browser.close()
+@pytest.fixture(scope="function")
+def language(request) -> str:
+    """Get language from command line"""
+    return request.config.getoption("--language").lower()
 
 
 @pytest.fixture(scope="function")
-def stealth_mode(request):
-    """Check if stealth mode is enabled"""
-    return request.config.getoption("--stealth")
-
-
-@pytest.fixture(scope="function")
-def session_file_path(request):
-    """Get session file path if provided"""
-    return request.config.getoption("--session-file")
-
-
-@pytest.fixture(scope="function")
-def context(browser: Browser, stealth_mode: bool, session_file_path: str) -> Generator[BrowserContext, None, None]:
+def driver(browser_type: str, is_headless: bool) -> Generator[webdriver.Remote, None, None]:
     """
-    Browser context - function scoped
-    Creates isolated context for each test
+    Main WebDriver fixture.
+    Initializes driver, sets window size, and handles teardown.
     """
-    from utils.browser_config import StealthBrowserConfig, RecaptchaHelper
-    
-    if stealth_mode:
-        logger.info("Creating STEALTH browser context")
-        context = StealthBrowserConfig.create_stealth_context(browser)
-        
-        if session_file_path:
-            logger.info(f"Loading saved session from: {session_file_path}")
-            RecaptchaHelper.use_saved_session(context, session_file_path)
-    else:
-        logger.info("Creating browser context")
-        
-        # Загружаем сессию если указана (БЕЗ stealth)
-        storage_state = None
-        if session_file_path:
-            import json
-            from pathlib import Path
-            
-            if Path(session_file_path).exists():
-                logger.info(f"Loading saved session from: {session_file_path}")
-                with open(session_file_path, 'r') as f:
-                    session_data = json.load(f)
-                
-                storage_state = {
-                    "cookies": session_data.get('cookies', []),
-                    "origins": session_data.get('storage', {}).get('local_storage', [])
-                }
-                logger.info(f"✓ Loaded {len(storage_state['cookies'])} cookies")
-            else:
-                logger.warning(f"Session file not found: {session_file_path}")
-        
-        context = browser.new_context(
-            viewport={
-                "width": BrowserConfig.VIEWPORT_WIDTH,
-                "height": BrowserConfig.VIEWPORT_HEIGHT
-            },
-            locale="en-US",
-            timezone_id="Asia/Dubai",
-            storage_state=storage_state,  # Загружаем сессию при создании контекста
-        )
-
-    context.set_default_timeout(BrowserConfig.TIMEOUT)
-    yield context
-    logger.info("Closing browser context")
-    context.close()
-
-
-@pytest.fixture(scope="function")
-def page(context: BrowserContext) -> Generator[Page, None, None]:
-    """
-    Page instance - function scoped
-    New page for each test
-    """
-    logger.info("Creating new page")
-    page = context.new_page()
-
-    yield page
-
-    logger.info("Closing page")
-    page.close()
-
-
-@pytest.fixture(scope="function")
-def mobile_page(browser: Browser) -> Generator[Page, None, None]:
-    """
-    Mobile page instance - function scoped
-    For mobile-specific tests
-    """
-    logger.info(f"Creating mobile page ({BrowserConfig.MOBILE_DEVICE})")
-
-    mobile_context = browser.new_context(
-        **browser.devices[BrowserConfig.MOBILE_DEVICE]
-    )
-
-    mobile_context.set_default_timeout(BrowserConfig.TIMEOUT)
-    page = mobile_context.new_page()
-
-    yield page
-
-    logger.info("Closing mobile page")
-    page.close()
-    mobile_context.close()
-
-
-@pytest.fixture(scope="function")
-def stealth_page(request, browser: Browser) -> Generator[Page, None, None]:
-    """
-    Create a stealth page for bypassing CAPTCHA
-    
-    Usage:
-        pytest --stealth
-        pytest --stealth --session-file saved_session.json
-    """
-    from utils.browser_config import create_optimal_test_browser
-    
-    session_file = request.config.getoption("--session-file")
-    context, page = create_optimal_test_browser(browser, session_file)
-    
-    yield page
-    
-    page.close()
-    context.close()
-
-
-@pytest.fixture(scope="function")
-def chatbot_page(page: Page, test_language: str) -> ChatPage:
-    """
-    ChatPage instance with navigation
-
-    Args:
-        page: Playwright Page
-        test_language: Language to test (en or ar)
-
-    Returns:
-        ChatPage instance
-    """
-    logger.info(f"Initializing ChatPage for language: {test_language}")
-
-    chatbot = ChatPage(page)
-
-    # Navigate to appropriate URL based on language
-    url = ENGLISH_URL if test_language == "en" else ARABIC_URL
-    chatbot.navigate(url)
-
-    # Wait for chat widget to load
+    driver_instance = None
+    logger.info(f"Launching {browser_type} browser (headless={is_headless})")
     try:
-        chatbot.wait_for_chat_widget(timeout=15000)
-    except Exception as e:
-        logger.error(f"Failed to load chat widget: {e}")
-        # Take screenshot for debugging
-        if TestConfig.SCREENSHOT_ON_FAILURE:
-            chatbot.take_screenshot("chat_widget_load_failure")
-        raise
+        if browser_type == "chrome":
+            options = ChromeOptions()
+            if is_headless:
+                options.add_argument("--headless")
+                options.add_argument("--no-sandbox")
+                options.add_argument("--disable-dev-shm-usage")
+            options.add_argument(f"--window-size={BrowserConfig.WINDOW_WIDTH},{BrowserConfig.WINDOW_HEIGHT}")
+            options.add_argument("--disable-gpu")
+            driver_instance = webdriver.Chrome(
+                service=webdriver.chrome.service.Service(ChromeDriverManager().install()),
+                options=options
+            )
+        elif browser_type == "firefox":
+            options = FirefoxOptions()
+            if is_headless:
+                options.add_argument("--headless")
+            options.add_argument(f"--width={BrowserConfig.WINDOW_WIDTH}")
+            options.add_argument(f"--height={BrowserConfig.WINDOW_HEIGHT}")
+            driver_instance = webdriver.Firefox(
+                service=webdriver.firefox.service.Service(GeckoDriverManager().install()),
+                options=options
+            )
+        else:
+            raise ValueError(f"Unsupported browser: {browser_type}")
 
-    return chatbot
+        driver_instance.implicitly_wait(BrowserConfig.IMPLICIT_WAIT)
+        yield driver_instance
+
+    finally:
+        if driver_instance:
+            logger.info("Closing browser")
+            driver_instance.quit()
 
 
 @pytest.fixture(scope="function")
-def mobile_chatbot_page(mobile_page: Page, test_language: str) -> ChatPage:
-    """Mobile chatbot page instance"""
-    logger.info(f"Initializing mobile ChatPage for language: {test_language}")
+def chatbot_page(driver: webdriver.Remote, language: str) -> Generator[ChatPage, None, None]:
+    """
+    MODIFIED FIXTURE:
+    Initializes ChatPage, navigates, and handles disclaimers/CAPTCHA
+    to provide a test-ready page.
+    """
+    url = ENGLISH_URL if language == "en" else ARABIC_URL
+    logger.info(f"Initializing ChatPage for language: {language}")
 
-    chatbot = ChatPage(mobile_page)
-    url = ENGLISH_URL if test_language == "en" else ARABIC_URL
+    chatbot = ChatPage(driver, language=language)
     chatbot.navigate(url)
 
     try:
-        chatbot.wait_for_chat_widget(timeout=15000)
-    except Exception as e:
-        logger.error(f"Failed to load mobile chat widget: {e}")
-        if TestConfig.SCREENSHOT_ON_FAILURE:
-            chatbot.take_screenshot("mobile_chat_widget_load_failure")
-        raise
+        logger.info("Attempting to close disclaimer...")
+        chatbot.close_disclaimer_reliably() #
+        logger.info("Disclaimer handled.")
 
-    return chatbot
+        logger.info("Attempting to close potential CAPTCHA...")
+        chatbot.close_captcha_modals() #
+        logger.info("CAPTCHA modals handled.")
+
+    except Exception as e:
+        logger.error(f"Error during page preparation: {e}")
+
+    try:
+        chatbot.wait_for_widget()
+        chatbot.switch_to_chat_iframe()
+        logger.info("Switched to chat iframe. Page is ready.")
+        yield chatbot
+
+    except Exception as e:
+        logger.error(f"Failed to initialize chatbot: {e}")
+        ScreenshotHelper.take_screenshot(driver, f"chatbot_init_failed_{language}")
+        pytest.fail(f"Chatbot widget failed to load: {e}")
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """
-    Hook to capture test results and take screenshots on failure
+    Hook to capture test results and take screenshots on failure.
     """
     outcome = yield
     report = outcome.get_result()
 
-    # Only process on test call phase (not setup/teardown)
-    if report.when == "call":
-        # Get the page fixture if available
-        if "page" in item.funcargs or "chatbot_page" in item.funcargs:
-            if report.failed and TestConfig.SCREENSHOT_ON_FAILURE:
-                # Get page from either fixture
-                chatbot = item.funcargs.get("chatbot_page")
-                page_obj = item.funcargs.get("page")
+    if report.when == "call" and report.failed:
+        logger.info(f"Test '{item.name}' FAILED")
+        if TestConfig.SCREENSHOT_ON_FAILURE:
+            # Try to get the fixture instance
+            driver_instance = None
+            if "chatbot_page" in item.funcargs:
+                driver_instance = item.funcargs["chatbot_page"].driver
+            elif "driver" in item.funcargs:
+                driver_instance = item.funcargs["driver"]
 
-                screenshot_name = ScreenshotHelper.generate_screenshot_name(
-                    item.name,
-                    "failed"
-                )
-
+            if driver_instance:
                 try:
-                    if chatbot:
-                        screenshot_path = chatbot.take_screenshot(screenshot_name)
-                        logger.info(f"Screenshot saved: {screenshot_path}")
-
-                        # Save metadata
-                        ScreenshotHelper.save_screenshot_metadata(
-                            screenshot_path,
-                            item.name,
-                            {
-                                "error": str(report.longrepr),
-                                "test_phase": report.when
-                            }
-                        )
-                    elif page_obj:
-                        screenshot_path = SCREENSHOTS_DIR / screenshot_name
-                        page_obj.screenshot(path=str(screenshot_path))
-                        logger.info(f"Screenshot saved: {screenshot_path}")
+                    screenshot_name = ScreenshotHelper.generate_screenshot_name(item.name, "failed")
+                    screenshot_path = str(SCREENSHOTS_DIR / screenshot_name)
+                    driver_instance.save_screenshot(screenshot_path)
+                    logger.info(f"Screenshot saved: {screenshot_path}")
                 except Exception as e:
                     logger.error(f"Failed to capture screenshot: {e}")
+            else:
+                logger.warning("Could not find 'driver' or 'chatbot_page' fixture for screenshot.")
 
 
 @pytest.fixture(scope="session", autouse=True)
 def test_session_setup():
-    """
-    Session-level setup and teardown
-    Runs once before all tests and once after
-    """
+    """Session-level setup and teardown"""
     logger.info("=" * 80)
     logger.info("Starting Test Session")
     logger.info("=" * 80)
@@ -361,11 +194,7 @@ def test_session_setup():
 
 @pytest.fixture(scope="function", autouse=True)
 def test_case_logger(request):
-    """
-    Log test case start and end
-    """
+    """Log test case start and end"""
     logger.info(f"Starting test: {request.node.name}")
-
     yield
-
     logger.info(f"Finished test: {request.node.name}")

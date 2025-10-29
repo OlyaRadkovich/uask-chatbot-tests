@@ -1,380 +1,257 @@
 """
-Page Object Model for U-Ask Chatbot
-Implements interactions with the chatbot interface
+Page Object Model for the U-Ask Chatbot Page
 """
-from typing import Optional, List
-from playwright.sync_api import Page, Locator
-from config import Selectors, TestConfig
 import logging
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    TimeoutException,
+    ElementClickInterceptedException
+)
+from config import Selectors  # <--- THIS IS THE FIX. IMPORT THE CLASS.
 
+# Setup logger
 logger = logging.getLogger(__name__)
 
 
 class ChatPage:
-    """
-    Page Object for U-Ask chatbot interface
-    Encapsulates all interactions with the chatbot UI
-    """
+    """Page Object for the main chat interface"""
 
-    def __init__(self, page: Page):
+    def __init__(self, driver: webdriver.Remote, language: str = "en"):
         """
-        Initialize ChatPage with Playwright page object
-
-        Args:
-            page: Playwright Page instance
+        Initialize the ChatPage object
+        :param driver: Selenium WebDriver instance
+        :param language: 'en' or 'ar'
         """
-        self.page = page
-        self.timeout = TestConfig.MAX_RESPONSE_TIME
+        self.driver = driver
+        self.language = language
+        self.wait = WebDriverWait(driver, 10)  # Wait up to 10 seconds
+        self.short_wait = WebDriverWait(driver, 3)
+        self.default_timeout = 20  # Default wait time
+        self.locators = Selectors()  # This line will now work
 
-    # Locators
-    @property
-    def chat_widget(self) -> Locator:
-        """Chat widget container"""
-        # Multiple possible selectors for flexibility
-        return self.page.locator(
-            f"{Selectors.CHAT_WIDGET}, iframe[title*='chat'], #chat-container"
-        ).first
-
-    @property
-    def input_box(self) -> Locator:
-        """Chat input field"""
-        return self.page.locator(
-            f"{Selectors.INPUT_BOX}, textarea, input[placeholder]"
-        ).first
-
-    @property
-    def send_button(self) -> Locator:
-        """Send message button"""
-        return self.page.locator(
-            f"{Selectors.SEND_BUTTON}, button:has-text('Send'), button[aria-label*='send' i]"
-        ).first
-
-    @property
-    def message_container(self) -> Locator:
-        """Container with all messages"""
-        return self.page.locator(
-            f"{Selectors.MESSAGE_CONTAINER}, .messages, [role='log']"
-        ).first
-
-    @property
-    def user_messages(self) -> Locator:
-        """All user messages"""
-        return self.page.locator(
-            f"{Selectors.USER_MESSAGE}, .user, [data-message-type='user']"
-        )
-
-    @property
-    def ai_responses(self) -> Locator:
-        """All AI responses"""
-        return self.page.locator(
-            f"{Selectors.AI_RESPONSE}, .assistant, .bot, [data-message-type='assistant']"
-        )
-
-    @property
-    def loading_indicator(self) -> Locator:
-        """Loading/typing indicator"""
-        return self.page.locator(
-            f"{Selectors.LOADING_INDICATOR}, .spinner, [role='progressbar']"
-        )
-
-    @property
-    def error_message(self) -> Locator:
-        """Error message display"""
-        return self.page.locator(
-            f"{Selectors.ERROR_MESSAGE}, .error, [role='alert']"
-        )
-
-    # Actions
-    def navigate(self, url: str) -> None:
-        """
-        Navigate to the specified URL
-
-        Args:
-            url: URL to navigate to
-        """
+    def navigate(self, url: str):
+        """Navigate to the chat page URL"""
         logger.info(f"Navigating to {url}")
-        self.page.goto(url, wait_until="domcontentloaded", timeout=self.timeout)
-        self.page.wait_for_load_state("networkidle", timeout=self.timeout)
+        self.driver.get(url)
 
-    def wait_for_chat_widget(self, timeout: Optional[int] = None) -> None:
+    def wait_for_widget(self, timeout: int = 15):
         """
-        Wait for chat widget to be visible
-
-        Args:
-            timeout: Custom timeout in ms (uses default if None)
+        Wait for the chat widget's iframe to be present
+        (This assumes the chat widget is inside an iframe)
         """
-        timeout = timeout or self.timeout
-        logger.info("Waiting for chat widget to load")
-
-        # Try multiple strategies to find chat widget
         try:
-            self.chat_widget.wait_for(state="visible", timeout=timeout)
-        except Exception as e:
-            # If widget is in iframe, try to find and switch
-            iframe = self.page.frame_locator("iframe").first
-            if iframe:
-                logger.info("Chat widget found in iframe")
-                return
-            raise e
+            logger.info("Waiting for chat widget to load")
+            # This selector is a guess. Update it with the real iframe selector.
+            # If there is no iframe, wait for self.locators.INPUT_BOX instead.
+            iframe_selector = (By.CSS_SELECTOR, "iframe[title='Chatbot']")
+            WebDriverWait(self.driver, timeout).until(
+                EC.presence_of_element_located(iframe_selector)
+            )
+            logger.info("Chat widget found in iframe")
+        except TimeoutException:
+            logger.error("Chat widget iframe did not load in time")
+            raise
 
-    def send_message(self, message: str, wait_for_response: bool = True) -> None:
-        """
-        Send a message in the chat
-
-        Args:
-            message: Message text to send
-            wait_for_response: Whether to wait for AI response
-        """
-        logger.info(f"Sending message: {message[:50]}...")
-
-        # Ensure input is visible and ready
-        self.input_box.wait_for(state="visible", timeout=self.timeout)
-
-        # Clear any existing text
-        self.input_box.clear()
-
-        # Type message
-        self.input_box.fill(message)
-
-        # Small delay to ensure text is filled
-        self.page.wait_for_timeout(500)
-
-        # Click send button
-        self.send_button.click()
-
-        if wait_for_response:
-            self.wait_for_response()
-
-    def wait_for_response(self, timeout: Optional[int] = None) -> None:
-        """
-        Wait for AI response to appear
-
-        Args:
-            timeout: Custom timeout in ms
-        """
-        timeout = timeout or TestConfig.MAX_RESPONSE_TIME_AI
-        logger.info("Waiting for AI response")
-
-        # Wait for loading indicator to appear and disappear
+    def switch_to_chat_iframe(self):
+        """Switch WebDriver context into the chat widget's iframe"""
         try:
-            self.loading_indicator.wait_for(state="visible", timeout=5000)
-            self.loading_indicator.wait_for(state="hidden", timeout=timeout)
-        except Exception:
-            # Loading indicator might not appear for fast responses
+            # Update this selector
+            iframe_element = self.driver.find_element(By.CSS_SELECTOR, "iframe[title='Chatbot']")
+            self.driver.switch_to.frame(iframe_element)
+            logger.info("Switched to chat iframe context")
+        except NoSuchElementException:
+            logger.warning("Chat iframe not found. Assuming no iframe.")
+            # If the chat is not in an iframe, this function can be skipped
             pass
+        except Exception as e:
+            logger.error(f"Error switching to iframe: {e}")
+            raise
 
-        # Ensure at least one AI response is visible
-        self.ai_responses.first.wait_for(state="visible", timeout=timeout)
+    def switch_to_default_content(self):
+        """Switch back to the main page content"""
+        self.driver.switch_to.default_content()
 
-        # Small delay to ensure response is fully rendered
-        self.page.wait_for_timeout(1000)
+    def get_input_box(self):
+        """Find and return the chat input box"""
+        try:
+            return self.wait.until(
+                EC.element_to_be_clickable(self.locators.INPUT_BOX)
+            )
+        except TimeoutException:
+            logger.error("Chat input box not found or not clickable")
+            raise
 
-    def get_last_ai_response(self) -> str:
+    def get_send_button(self):
+        """Find and return the send button"""
+        try:
+            return self.wait.until(
+                EC.element_to_be_clickable(self.locators.SEND_BUTTON)
+            )
+        except TimeoutException:
+            logger.error("Send button not found or not clickable")
+            raise
+
+    def send_message(self, message: str, wait_for_response: bool = True):
         """
-        Get the text of the last AI response
-
-        Returns:
-            Text content of the last AI response
-        """
-        logger.info("Getting last AI response")
-        responses = self.ai_responses.all()
-
-        if not responses:
-            logger.warning("No AI responses found")
-            return ""
-
-        last_response = responses[-1]
-        text = last_response.inner_text()
-        logger.info(f"Last response: {text[:100]}...")
-        return text
-
-    def get_all_ai_responses(self) -> List[str]:
-        """
-        Get all AI responses in the conversation
-
-        Returns:
-            List of AI response texts
-        """
-        logger.info("Getting all AI responses")
-        return [response.inner_text() for response in self.ai_responses.all()]
-
-    def get_last_user_message(self) -> str:
-        """
-        Get the text of the last user message
-
-        Returns:
-            Text content of the last user message
-        """
-        messages = self.user_messages.all()
-        return messages[-1].inner_text() if messages else ""
-
-    def is_input_cleared(self) -> bool:
-        """
-        Check if input field is empty after sending
-
-        Returns:
-            True if input is empty, False otherwise
-        """
-        input_value = self.input_box.input_value()
-        return len(input_value.strip()) == 0
-
-    def get_text_direction(self) -> str:
-        """
-        Get text direction (ltr or rtl) of the page
-
-        Returns:
-            'ltr' or 'rtl'
-        """
-        direction = self.page.evaluate("document.dir || document.documentElement.dir")
-        return direction or "ltr"
-
-    def is_rtl_layout(self) -> bool:
-        """
-        Check if the page is using RTL layout (for Arabic)
-
-        Returns:
-            True if RTL, False if LTR
-        """
-        return self.get_text_direction() == "rtl"
-
-    def scroll_to_bottom(self) -> None:
-        """Scroll chat container to bottom"""
-        logger.info("Scrolling to bottom")
-        self.message_container.evaluate("el => el.scrollTop = el.scrollHeight")
-
-    def get_message_count(self) -> dict:
-        """
-        Get count of user and AI messages
-
-        Returns:
-            Dict with 'user' and 'ai' message counts
-        """
-        return {
-            "user": self.user_messages.count(),
-            "ai": self.ai_responses.count()
-        }
-
-    def is_error_displayed(self) -> bool:
-        """
-        Check if an error message is displayed
-
-        Returns:
-            True if error is visible, False otherwise
+        Type a message and click send
+        :param message: The text to send
+        :param wait_for_response: Whether to wait for the AI response
         """
         try:
-            return self.error_message.is_visible()
-        except Exception:
-            return False
+            logger.info(f"Sending message: {message[:50]}...")
+            input_box = self.get_input_box()
+            input_box.clear()
+            input_box.send_keys(message)
 
-    def get_error_message(self) -> str:
-        """
-        Get error message text if displayed
+            send_button = self.get_send_button()
+            send_button.click()
 
-        Returns:
-            Error message text or empty string
-        """
-        if self.is_error_displayed():
-            return self.error_message.inner_text()
-        return ""
+            if wait_for_response:
+                self.wait_for_response()
+
+        except Exception as e:
+            logger.error(f"Error sending message: {e}")
+            raise
 
     def is_loading(self) -> bool:
-        """
-        Check if loading indicator is visible
-
-        Returns:
-            True if loading, False otherwise
-        """
+        """Check if the AI loading indicator is visible"""
         try:
-            return self.loading_indicator.is_visible()
-        except Exception:
+            # This is a guess. Update with the real loading selector
+            loading_indicator = self.driver.find_element(*self.locators.AI_TYPING_INDICATOR)
+            return loading_indicator.is_displayed()
+        except NoSuchElementException:
             return False
 
-    def take_screenshot(self, name: str) -> str:
+    def wait_for_response(self, timeout: int = 30):
         """
-        Take screenshot of the page
-
-        Args:
-            name: Screenshot filename (without extension)
-
-        Returns:
-            Path to saved screenshot
+        Wait for the AI loading indicator to appear and then disappear.
+        This signals a response has started and finished.
         """
-        from config import SCREENSHOTS_DIR
-        import datetime
-
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{name}_{timestamp}.png"
-        filepath = SCREENSHOTS_DIR / filename
-
-        logger.info(f"Taking screenshot: {filepath}")
-        self.page.screenshot(path=str(filepath), full_page=True)
-
-        return str(filepath)
-
-    def check_accessibility(self) -> dict:
-        """
-        Run basic accessibility checks
-
-        Returns:
-            Dict with accessibility check results
-        """
-        logger.info("Running accessibility checks")
-
-        results = {
-            "has_labels": False,
-            "has_aria_attributes": False,
-            "keyboard_navigable": False
-        }
-
-        # Check if input has label or aria-label
         try:
-            aria_label = self.input_box.get_attribute("aria-label")
-            placeholder = self.input_box.get_attribute("placeholder")
-            results["has_labels"] = bool(aria_label or placeholder)
-        except Exception:
-            pass
+            logger.info("Waiting for AI response to start...")
+            # 1. Wait for the loading indicator to appear
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located(self.locators.AI_TYPING_INDICATOR)
+            )
+            logger.info("AI response started (loading indicator found).")
 
-        # Check for ARIA attributes
-        try:
-            role = self.message_container.get_attribute("role")
-            results["has_aria_attributes"] = bool(role)
-        except Exception:
-            pass
+            # 2. Wait for the loading indicator to disappear
+            WebDriverWait(self.driver, timeout).until(
+                EC.invisibility_of_element_located(self.locators.AI_TYPING_INDICATOR)
+            )
+            logger.info("AI response finished (loading indicator disappeared).")
+        except TimeoutException:
+            logger.warning("AI response timeout. Indicator did not appear or disappear.")
+            # This might not be a failure, just a very fast response
+        except Exception as e:
+            logger.error(f"Error while waiting for response: {e}")
 
-        # Check if send button is keyboard accessible
-        try:
-            tab_index = self.send_button.get_attribute("tabindex")
-            results["keyboard_navigable"] = tab_index is None or int(tab_index) >= 0
-        except Exception:
-            pass
-
-        return results
-
-    def wait_for_stable_response(self, timeout: int = 5000) -> None:
+    def wait_for_stable_response(self, initial_wait: int = 1, check_interval: float = 0.5, stable_time: int = 2):
         """
-        Wait for AI response to stop changing (fully rendered)
-
-        Args:
-            timeout: Maximum time to wait for stability
+        Waits for an AI response to finish "typing" by checking for text stability.
+        This is more reliable than a simple loading indicator.
         """
-        logger.info("Waiting for response to stabilize")
+        try:
+            # Wait for the first sign of a response
+            self.wait_for_response(timeout=self.default_timeout)
+        except TimeoutException:
+            logger.warning("Initial response indicator not found, proceeding anyway.")
 
-        previous_text = ""
-        stable_count = 0
-        max_checks = timeout // 500
+        logger.info("Waiting for AI response text to stabilize...")
+        last_text = ""
+        stable_counter = 0
+        max_checks = int(self.default_timeout / check_interval)
 
         for _ in range(max_checks):
             current_text = self.get_last_ai_response()
-
-            if current_text == previous_text and len(current_text) > 0:
-                stable_count += 1
-                if stable_count >= 3:  # 3 consecutive matches
-                    logger.info("Response stabilized")
-                    return
+            if current_text == last_text and current_text != "":
+                stable_counter += 1
             else:
-                stable_count = 0
+                stable_counter = 0  # Reset counter if text changes
 
-            previous_text = current_text
-            self.page.wait_for_timeout(500)
+            last_text = current_text
 
-        logger.warning("Response did not stabilize within timeout")
+            # If text hasn't changed for 'stable_time' seconds
+            if stable_counter * check_interval >= stable_time:
+                logger.info("Response text is stable.")
+                return True
+
+            time.sleep(check_interval)
+
+        logger.warning("Response text did not stabilize in time.")
+        return False
+
+
+    def get_last_ai_response(self) -> str:
+        """Get the text from the last AI response block"""
+        try:
+            messages = self.driver.find_elements(*self.locators.AI_MESSAGE)
+            if messages:
+                return messages[-1].text.strip()
+            return ""
+        except NoSuchElementException:
+            logger.warning("Could not find any AI messages.")
+            return ""
+
+    def get_last_user_message(self) -> str:
+        """Get the text from the last user message block"""
+        try:
+            messages = self.driver.find_elements(*self.locators.USER_MESSAGE)
+            if messages:
+                return messages[-1].text.strip()
+            return ""
+        except NoSuchElementException:
+            logger.warning("Could not find any user messages.")
+            return ""
+
+    def close_disclaimer_reliably(self, attempts: int = 3):
+        """
+        Reliably find and close the disclaimer overlay.
+        Handles race conditions where the overlay might not be present.
+        """
+        for i in range(attempts):
+            try:
+                self.switch_to_default_content() # Look on the main page
+                disclaimer_btn = self.short_wait.until(
+                    EC.element_to_be_clickable(self.locators.DISCLAIMER_BUTTON)
+                )
+                logger.info(f"Disclaimer found (attempt {i+1}), closing...")
+                disclaimer_btn.click()
+                logger.info("Disclaimer closed.")
+                return
+            except TimeoutException:
+                logger.info("Disclaimer not found, assuming it's closed.")
+                return # Not an error, it might already be gone
+            except ElementClickInterceptedException:
+                logger.warning("Disclaimer click intercepted, retrying...")
+                time.sleep(1)
+            except Exception as e:
+                logger.error(f"Error closing disclaimer: {e}")
+                time.sleep(1)
+
+    def close_captcha_modals(self, attempts: int = 2):
+        """
+        Reliably find and close any CAPTCHA modals that might appear.
+        This simply closes the modal, it doesn't solve it.
+        """
+        for i in range(attempts):
+            try:
+                self.switch_to_default_content() # Look on the main page
+                close_btn = self.short_wait.until(
+                    EC.element_to_be_clickable(self.locators.CAPTCHA_CLOSE_BUTTON)
+                )
+                logger.info(f"CAPTCHA modal found (attempt {i+1}), closing...")
+                close_btn.click()
+                logger.info("CAPTCHA modal closed.")
+                return
+            except TimeoutException:
+                logger.info("CAPTCHA modal not found.")
+                return # Not an error
+            except Exception as e:
+                logger.error(f"Error closing CAPTCHA: {e}")
+                time.sleep(1)

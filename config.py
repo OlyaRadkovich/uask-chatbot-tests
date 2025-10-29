@@ -4,6 +4,7 @@ Configuration file for U-Ask QA Automation Framework
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from selenium.webdriver.common.by import By
 
 # Load environment variables
 load_dotenv()
@@ -26,15 +27,17 @@ ARABIC_URL = f"{BASE_URL}/ar/"
 
 # Browser configuration
 class BrowserConfig:
-    BROWSER_TYPE = os.getenv("BROWSER", "chromium")  # chromium, firefox, webkit
+    BROWSER_TYPE = os.getenv("BROWSER", "chrome")  # chrome, firefox
     HEADLESS = os.getenv("HEADLESS", "False").lower() == "true"
-    VIEWPORT_WIDTH = int(os.getenv("VIEWPORT_WIDTH", "1920"))
-    VIEWPORT_HEIGHT = int(os.getenv("VIEWPORT_HEIGHT", "1080"))
-    SLOW_MO = int(os.getenv("SLOW_MO", "0"))  # Slow down operations by ms
-    TIMEOUT = int(os.getenv("TIMEOUT", "30000"))  # Default timeout in ms
+    WINDOW_WIDTH = int(os.getenv("VIEWPORT_WIDTH", "1920"))
+    WINDOW_HEIGHT = int(os.getenv("VIEWPORT_HEIGHT", "1080"))
+    IMPLICIT_WAIT = int(os.getenv("IMPLICIT_WAIT", "10"))  # seconds
+    PAGE_LOAD_TIMEOUT = int(os.getenv("PAGE_LOAD_TIMEOUT", "30"))  # seconds
 
     # Mobile emulation
-    MOBILE_DEVICE = os.getenv("MOBILE_DEVICE", "iPhone 12")  # For mobile testing
+    MOBILE_DEVICE = {
+        "deviceName": os.getenv("MOBILE_DEVICE", "iPhone 12")
+    }
 
 # Test configuration
 class TestConfig:
@@ -52,8 +55,7 @@ class TestConfig:
 
 # AI Response validation thresholds
 class AIValidationConfig:
-    # Simple similarity threshold for comparing responses (using built-in difflib)
-    SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.5"))  # For semantic similarity
+    SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.5"))
 
 # Logging configuration
 class LogConfig:
@@ -64,15 +66,15 @@ class LogConfig:
 # Test data
 TEST_DATA_FILE = DATA_DIR / "test-data.json"
 
-# Selectors (can be overridden if needed)
+# Selectors with Selenium By class
 class Selectors:
-    # These will be updated after inspecting the actual U-Ask website
-    CHAT_WIDGET = "#chat-widget"
-    INPUT_BOX = "textarea[placeholder*='Ask'], input[type='text']"
-    SEND_BUTTON = "button[type='submit'], button[aria-label*='Send']"
-    MESSAGE_CONTAINER = ".message-container, .chat-messages"
-    USER_MESSAGE = ".user-message, .message.user"
-    AI_RESPONSE = ".ai-message, .bot-message, .message.bot"
-    LOADING_INDICATOR = ".loading, .typing-indicator"
-    ERROR_MESSAGE = ".error-message, .alert-error"
-    LANGUAGE_SELECTOR = "[lang], .language-selector"
+    # Tuple format: (By.LOCATOR_TYPE, "locator_value")
+    CHAT_WIDGET = (By.CSS_SELECTOR, "#chat-widget")
+    INPUT_BOX = (By.CSS_SELECTOR, "textarea[placeholder*='Ask'], input[type='text']")
+    SEND_BUTTON = (By.CSS_SELECTOR, "button[type='submit'], button[aria-label*='Send']")
+    MESSAGE_CONTAINER = (By.CSS_SELECTOR, ".message-container, .chat-messages")
+    USER_MESSAGE = (By.CSS_SELECTOR, ".user-message, .message.user")
+    AI_RESPONSE = (By.CSS_SELECTOR, ".ai-message, .bot-message, .message.bot")
+    LOADING_INDICATOR = (By.CSS_SELECTOR, ".loading, .typing-indicator")
+    ERROR_MESSAGE = (By.CSS_SELECTOR, ".error-message, .alert-error")
+    LANGUAGE_SELECTOR = (By.CSS_SELECTOR, "[lang], .language-selector")
