@@ -1,4 +1,6 @@
 """Chat page object with chatbot interaction methods."""
+import time
+import logging
 from typing import List, Optional
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -6,253 +8,325 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from core.base_page import BasePage
 from config.settings import settings
+from utils.automation_helpers import AutomationHelpers
+
+logger = logging.getLogger(__name__)
 
 
 class ChatPage(BasePage):
     """Page object for chatbot interface."""
     
-    # Locators - используем отдельные селекторы для лучшей совместимости
-    CHAT_INPUT_SELECTOR = (By.CSS_SELECTOR, "textarea, input[type='text']")
-    SEND_BUTTON_CSS = (By.CSS_SELECTOR, "button[type='submit'], .send-button, button.send")
-    SEND_BUTTON_XPATH = (By.XPATH, "//button[contains(text(), 'Отправить') or contains(text(), 'Send')]")
-    MESSAGE_CONTAINER_SELECTOR = (By.CSS_SELECTOR, ".message, .chat-message")
-    USER_MESSAGE_SELECTOR = (By.CSS_SELECTOR, ".user-message, [class*='user']")
-    BOT_MESSAGE_SELECTOR = (By.CSS_SELECTOR, ".bot-message, .assistant-message, [class*='bot'], [class*='assistant']")
-    LOADING_INDICATOR_SELECTOR = (By.CSS_SELECTOR, ".loading, .spinner, [class*='loading']")
-    CHAT_HISTORY_SELECTOR = (By.CSS_SELECTOR, ".chat-history, .messages-container")
-    
-    # Disclaimer modal locators
-    DISCLAIMER_MODAL_SELECTOR = (By.CSS_SELECTOR, "[class*='disclaimer'], [class*='modal'], [id*='disclaimer']")
-    ACCEPT_BUTTON_XPATH = (By.XPATH, "//button[contains(text(), 'Accept') or contains(text(), 'Accept and continue')]")
-    ACCEPT_BUTTON_CSS = (By.CSS_SELECTOR, "button:contains('Accept'), .accept-button, [aria-label*='Accept']")
-    DECLINE_BUTTON_XPATH = (By.XPATH, "//button[contains(text(), 'Decline')]")
+    # Locators
+    # CSS селекторы более надежны для динамических страниц, XPath как fallback
+    CHAT_INPUT = (By.CSS_SELECTOR, ".expando-textarea.chat-input-question.ask-input, .expando-textarea.chat-input-question, .chat-input-question, [contenteditable='true']")
+    CHAT_INPUT_SELECTOR = (By.CSS_SELECTOR, ".expando-textarea.chat-input-question.ask-input, .expando-textarea.chat-input-question, .chat-input-question, [contenteditable='true']")  # Alias для совместимости
+    SEND_BUTTON = (By.CSS_SELECTOR, "#sendButton, button[type='submit'], .send-button")
+    BOT_MESSAGE = (By.CSS_SELECTOR, ".bot-message, .assistant-message, [class*='bot'], [class*='assistant']")
+    ACCEPT_BUTTON = (By.XPATH, "//button[contains(text(), 'Accept')]")
     
     def __init__(self, driver):
         """Initialize chat page."""
         super().__init__(driver)
     
-    def accept_disclaimer(self, timeout: Optional[int] = None) -> bool:
-        """
-        Accept disclaimer modal if present.
-        
-        Args:
-            timeout: Optional timeout override
-            
-        Returns:
-            True if disclaimer was accepted, False if not present
-        """
-        try:
-            wait_timeout = timeout or settings.DEFAULT_TIMEOUT
-            # Проверяем наличие disclaimer модального окна
-            if self.is_element_present(self.DISCLAIMER_MODAL_SELECTOR, timeout=3) or \
-               self.is_element_present(self.ACCEPT_BUTTON_XPATH, timeout=3):
-                
-                # Пробуем найти и нажать кнопку Accept
-                accept_found = False
-                
-                # Сначала пробуем XPath (более надежный для текстового поиска)
-                if self.is_element_present(self.ACCEPT_BUTTON_XPATH, timeout=2):
-                    self.click_element(self.ACCEPT_BUTTON_XPATH)
-                    accept_found = True
-                # Если не нашли, пробуем различные варианты селекторов
-                elif self.is_element_present((By.XPATH, "//a[contains(text(), 'Accept')]"), timeout=2):
-                    self.click_element((By.XPATH, "//a[contains(text(), 'Accept')]"))
-                    accept_found = True
-                elif self.is_element_present((By.XPATH, "//button[contains(., 'Accept')]"), timeout=2):
-                    self.click_element((By.XPATH, "//button[contains(., 'Accept')]"))
-                    accept_found = True
-                
-                if accept_found:
-                    # Ждем, пока модальное окно исчезнет
-                    import time
-                    time.sleep(1)  # Небольшая задержка для анимации закрытия
-                    return True
-                
-            return False
-        except Exception:
-            # Если возникла ошибка, продолжаем (может быть, disclaimer уже был закрыт)
-            return False
+    def accept_disclaimer(self, timeout: int = None) -> bool:
+        """Accept disclaimer modal if present (uses reliable helper)."""
+        return AutomationHelpers.close_disclaimer_reliably(self.driver, max_attempts=3)
     
     def is_page_loaded(self) -> bool:
-        """
-        Check if chat page is loaded.
-        Also handles disclaimer acceptance.
-        """
-        # Сначала пробуем принять disclaimer, если он есть
+        """Check if chat page is loaded."""
         self.accept_disclaimer()
-        
-        # Затем проверяем, что поле ввода видно
-        return self.is_element_visible(self.CHAT_INPUT_SELECTOR)
+        return self.is_element_visible(self.CHAT_INPUT)
     
     def navigate(self, url: str) -> None:
-        """
-        Navigate to chat page and handle disclaimer if present.
-        
-        Args:
-            url: URL to navigate to
-        """
-        # Используем базовый метод навигации
+        """Navigate to chat page with full setup and stealth measures."""
         super().navigate(url)
         
-        # После навигации обрабатываем disclaimer
-        import time
-        time.sleep(1)  # Даем время для загрузки модального окна
+        # ВАЖНО: Даем время сайту "успокоиться" после навигации
+        # Это помогает избежать детекции быстрых действий автоматизации
+        import random
+        time.sleep(random.uniform(1.5, 2.5))  # Случайная задержка имитирует пользователя
+        
+        # Применяем дополнительные stealth скрипты после загрузки
+        try:
+            self.driver.execute_script("""
+                // Дополнительная защита от обнаружения после загрузки страницы
+                if (navigator.webdriver) {
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => false,
+                        configurable: true
+                    });
+                }
+                
+                // Скрываем элементы автоматизации из window
+                delete window.navigator.__proto__.webdriver;
+                
+                // Эмуляция реального поведения - небольшие случайные движения мыши
+                document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(() => {
+                        const event = new MouseEvent('mousemove', {
+                            view: window,
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: Math.random() * 100,
+                            clientY: Math.random() * 100
+                        });
+                        document.dispatchEvent(event);
+                    }, Math.random() * 1000 + 500);
+                });
+            """)
+        except Exception:
+            pass
+        
+        # Close disclaimer с реалистичными задержками
+        time.sleep(random.uniform(0.3, 0.7))
         self.accept_disclaimer()
+        
+        # Close CAPTCHA modals if any (only if blocking)
+        # Проверка выполняется внутри close_captcha_modals, задержка не нужна
+        AutomationHelpers.close_captcha_modals(self.driver)
+        
+        # Wait for services to load с реалистичной задержкой
+        AutomationHelpers.wait_for_services_to_load(self.driver, max_wait=15)
+        
+        # Final check for modals (only if blocking)
+        AutomationHelpers.close_captcha_modals(self.driver)
+    
+    def _type_text(self, element, text: str) -> None:
+        """
+        Helper method to type text into input field (handles contenteditable).
+        Uses realistic typing simulation to avoid bot detection.
+        """
+        logger.info(f"📝 Starting to type text: '{text[:50]}...'")
+        
+        is_contenteditable = element.get_attribute("contenteditable") == "true"
+        logger.info(f"   Element type: contenteditable={is_contenteditable}, tag={element.tag_name}")
+        
+        if is_contenteditable:
+            logger.info("   Using JavaScript method for contenteditable element")
+            # Для обхода детекции используем более реалистичный метод
+            # Прямая установка текста через JavaScript (самый надежный для защищенных сайтов)
+            self.driver.execute_script(
+                """
+                var el = arguments[0];
+                var txt = arguments[1];
+                
+                // Фокус и активация элемента (имитация клика пользователя)
+                el.focus();
+                el.click();
+                
+                // Убираем tabindex если мешает
+                var hadTabindex = el.hasAttribute('tabindex') && el.getAttribute('tabindex') == '-1';
+                if (hadTabindex) {
+                    el.removeAttribute('tabindex');
+                }
+                
+                // Очищаем содержимое
+                el.innerText = '';
+                el.textContent = '';
+                el.innerHTML = '';
+                
+                // Фокус еще раз (важно для некоторых сайтов)
+                el.focus();
+                
+                // Вставляем текст напрямую (наиболее надежный метод для защищенных сайтов)
+                el.innerText = txt;
+                el.textContent = txt;
+                
+                // Диспатчим события как настоящий пользователь (по порядку)
+                el.dispatchEvent(new Event('focus', { bubbles: true }));
+                el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
+                el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
+                el.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true, key: 'a' }));
+                
+                // Возвращаем tabindex если был
+                if (hadTabindex && !el.hasAttribute('tabindex')) {
+                    el.setAttribute('tabindex', '-1');
+                }
+                """,
+                element, text
+            )
+            
+            # Небольшая задержка для обработки событий
+            time.sleep(settings.SMALL_DELAY * 2)
+            
+            # Проверяем что текст действительно введен
+            result = self.driver.execute_script(
+                "return arguments[0].innerText || arguments[0].textContent || '';",
+                element
+            )
+            
+            logger.info(f"   Text check result: '{result[:50]}...'")
+            
+            if not result or result.strip() != text.strip():
+                logger.warning(f"⚠️ Text may not be set correctly. Expected: '{text}', Got: '{result}'")
+                # Fallback: пробуем через более простой метод
+                try:
+                    logger.info("   Trying fallback method...")
+                    self.driver.execute_script(
+                        "arguments[0].focus(); arguments[0].innerText = arguments[1]; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+                        element, text
+                    )
+                    time.sleep(settings.SMALL_DELAY)
+                    
+                    # Проверяем снова после fallback
+                    result = self.driver.execute_script(
+                        "return arguments[0].innerText || arguments[0].textContent || '';",
+                        element
+                    )
+                    logger.info(f"   Fallback result: '{result[:50]}...'")
+                except Exception as e:
+                    logger.error(f"❌ Fallback text input failed: {e}")
+            else:
+                logger.info(f"✅ Text successfully entered: '{result[:50]}...'")
+        else:
+            logger.info("   Using standard send_keys method for regular input")
+            element.clear()
+            element.send_keys(text)
+            
+            # Проверяем результат для обычного input
+            value = element.get_attribute("value") or ""
+            logger.info(f"   Text entered via send_keys: '{value[:50]}...'")
     
     def send_message(self, message: str, wait_for_response: bool = True) -> None:
-        """
-        Send message to chatbot.
+        """Send message to chatbot (uses reliable helpers with stealth measures)."""
+        logger.info(f"Sending message: {message[:50]}...")
         
-        Args:
-            message: Message text to send
-            wait_for_response: Whether to wait for bot response
-        """
-        # Убеждаемся, что disclaimer принят перед отправкой сообщения
-        self.accept_disclaimer(timeout=2)
+        # Случайные задержки имитируют поведение реального пользователя
+        import random
+        time.sleep(random.uniform(0.5, 1.0))
         
-        # Find and clear input field
-        input_element = self.find_element(self.CHAT_INPUT_SELECTOR)
-        input_element.clear()
-        input_element.send_keys(message)
+        # Close disclaimer
+        self.accept_disclaimer()
         
-        # Try to find and click send button (try CSS first, then XPath)
-        send_button_found = False
-        if self.is_element_present(self.SEND_BUTTON_CSS, timeout=2):
-            self.click_element(self.SEND_BUTTON_CSS)
-            send_button_found = True
-        elif self.is_element_present(self.SEND_BUTTON_XPATH, timeout=2):
-            self.click_element(self.SEND_BUTTON_XPATH)
-            send_button_found = True
+        # Close CAPTCHA modals if any (only if blocking)
+        AutomationHelpers.close_captcha_modals(self.driver)
         
-        if not send_button_found:
-            # Fallback: submit with Enter key
+        # ВАЖНО: Ждем загрузки динамического контента (реалистичная задержка)
+        time.sleep(random.uniform(1.0, 1.5))
+        
+        # Find chat elements reliably (checks main page, iframes, Shadow DOM)
+        elements = AutomationHelpers.find_chat_elements(self.driver)
+        
+        # Если элементы найдены в iframe, нужно переключиться на него для дальнейших действий
+        if elements.get("found_in") == "iframe":
+            logger.info("Chat found in iframe, elements should work within iframe context")
+            # Elements уже находятся в контексте iframe из helper функции
+            # Но для дальнейших действий нужно убедиться что мы в правильном контексте
+            if not elements["input_found"]:
+                raise ValueError("Input field not found in iframe")
+            input_element = elements["input_box"]
+        elif elements.get("found_in") == "shadow_dom":
+            logger.info("Chat found in Shadow DOM, using JavaScript access")
+            if not elements["input_found"]:
+                raise ValueError("Input field not found in Shadow DOM")
+            input_element = elements["input_box"]
+        elif not elements["input_found"]:
+            logger.warning("Input not found via helpers, trying direct selector...")
+            try:
+                wait = WebDriverWait(self.driver, 5, poll_frequency=0.5)
+                input_element = wait.until(EC.visibility_of_element_located(self.CHAT_INPUT))
+                elements["input_box"] = input_element
+                elements["input_found"] = True
+                elements["found_in"] = "main_page"
+            except Exception as e:
+                raise ValueError(f"Input field not found: {e}")
+        else:
+            input_element = elements["input_box"]
+        
+        if not elements["send_found"]:
+            logger.warning("Send button not found, will try Enter key")
+        
+        # Type message using our reliable method
+        logger.info(f"📝 Preparing to type message into input element...")
+        try:
+            logger.info(f"   Clicking input element first...")
+            input_element.click()
+            time.sleep(settings.SMALL_DELAY)
+            logger.info(f"   Input element clicked, now typing text...")
+        except Exception as e:
+            logger.warning(f"   Click failed, trying JavaScript click: {e}")
+            try:
+                self.driver.execute_script("arguments[0].click();", input_element)
+                time.sleep(settings.SMALL_DELAY)
+            except Exception as e2:
+                logger.error(f"   JavaScript click also failed: {e2}")
+        
+        # Вызываем _type_text с логированием
+        self._type_text(input_element, message)
+        
+        # Verify text entered
+        is_contenteditable = input_element.get_attribute("contenteditable") == "true"
+        if is_contenteditable:
+            actual_text = self.driver.execute_script(
+                "return arguments[0].innerText || arguments[0].textContent || '';",
+                input_element
+            )
+        else:
+            actual_text = input_element.get_attribute("value") or ""
+        
+        if not actual_text or message.strip() not in actual_text.strip():
+            logger.warning(f"Text may not be fully entered. Expected: '{message}', Got: '{actual_text}'")
+        
+        time.sleep(settings.SMALL_DELAY)
+        
+        # Send message
+        if elements["send_found"]:
+            elements["send_button"].click()
+        else:
             input_element.send_keys(Keys.RETURN)
         
-        # Wait for response if requested
+        # Close CAPTCHA if appeared after send (only if blocking)
+        time.sleep(0.5)  # Короткая пауза для возможного появления CAPTCHA после отправки
+        AutomationHelpers.close_captcha_modals(self.driver)
+        
         if wait_for_response:
             self.wait_for_bot_response()
     
-    def wait_for_bot_response(self, timeout: Optional[int] = None) -> bool:
-        """
-        Wait for bot to respond.
+    def wait_for_bot_response(self, timeout: Optional[int] = None) -> None:
+        """Wait for bot to respond."""
+        wait_timeout = timeout or (settings.DEFAULT_TIMEOUT * settings.BOT_RESPONSE_TIMEOUT_MULTIPLIER)
+        wait = WebDriverWait(self.driver, wait_timeout, poll_frequency=settings.POLLING_INTERVAL)
         
-        Args:
-            timeout: Optional timeout override
-            
-        Returns:
-            True if response received, False otherwise
-        """
-        try:
-            wait_timeout = timeout or settings.DEFAULT_TIMEOUT * 3  # Longer timeout for responses
-            wait = WebDriverWait(self.driver, wait_timeout, poll_frequency=settings.POLLING_INTERVAL)
-            
-            # Wait for loading to start (if present)
-            if self.is_element_present(self.LOADING_INDICATOR_SELECTOR, timeout=2):
-                # Wait for loading to disappear
-                self.wait_for_element_to_disappear(self.LOADING_INDICATOR_SELECTOR, timeout=wait_timeout)
-            
-            # Wait for bot message to appear
-            def bot_response_appeared(_driver):
-                try:
-                    messages = self.get_bot_messages()
-                    if len(messages) > 0:
-                        return True
-                    return self.is_element_visible(self.BOT_MESSAGE_SELECTOR, timeout=2)
-                except Exception:
-                    return False
-            
-            wait.until(bot_response_appeared)
-            return True
-        except Exception:
-            return False
+        def bot_response_appeared(_driver):
+            try:
+                return len(self.get_bot_messages()) > 0 or self.is_element_visible(
+                    self.BOT_MESSAGE, 
+                    timeout=settings.ELEMENT_PRESENT_TIMEOUT
+                )
+            except Exception:
+                return False
+        
+        wait.until(bot_response_appeared)
     
     def get_bot_messages(self) -> List[str]:
-        """
-        Get all bot messages from chat.
-        
-        Returns:
-            List of bot message texts
-        """
-        messages = []
+        """Get all bot messages from chat."""
         try:
-            elements = self.find_elements(self.BOT_MESSAGE_SELECTOR)
-            messages = [elem.text for elem in elements if elem.text.strip()]
+            elements = self.find_elements(self.BOT_MESSAGE)
+            return [elem.text for elem in elements if elem.text.strip()]
         except Exception:
-            pass
-        return messages
+            return []
     
     def get_last_bot_message(self) -> Optional[str]:
-        """
-        Get the last bot response.
-        
-        Returns:
-            Last bot message text or None
-        """
-        bot_messages = self.get_bot_messages()
-        return bot_messages[-1] if bot_messages else None
+        """Get the last bot response."""
+        messages = self.get_bot_messages()
+        return messages[-1] if messages else None
     
     def get_user_messages(self) -> List[str]:
-        """
-        Get all user messages from chat.
-        
-        Returns:
-            List of user message texts
-        """
-        messages = []
+        """Get all user messages from chat."""
         try:
-            elements = self.find_elements(self.USER_MESSAGE_SELECTOR)
-            messages = [elem.text for elem in elements if elem.text.strip()]
+            selector = (By.CSS_SELECTOR, ".user-message, [class*='user']")
+            elements = self.find_elements(selector)
+            return [elem.text for elem in elements if elem.text.strip()]
         except Exception:
-            pass
-        return messages
-    
-    def get_all_messages(self) -> List[str]:
-        """
-        Get all messages (user + bot) from chat.
-        
-        Returns:
-            List of all message texts
-        """
-        messages = []
-        try:
-            elements = self.find_elements(self.MESSAGE_CONTAINER_SELECTOR)
-            messages = [elem.text for elem in elements if elem.text.strip()]
-        except Exception:
-            pass
-        return messages
-    
-    def clear_chat(self) -> None:
-        """Clear chat history if clear button exists."""
-        clear_selectors = [
-            (By.CSS_SELECTOR, ".clear-chat, .reset-chat, button[aria-label*='clear']"),
-            (By.XPATH, "//button[contains(text(), 'Очистить')]"),
-            (By.XPATH, "//button[contains(text(), 'Clear')]")
-        ]
-        
-        for selector in clear_selectors:
-            if self.is_element_present(selector, timeout=2):
-                self.click_element(selector)
-                break
+            return []
     
     def is_response_received(self) -> bool:
         """Check if bot response was received."""
         return len(self.get_bot_messages()) > 0
     
-    def wait_for_input_ready(self, timeout: Optional[int] = None) -> bool:
-        """
-        Wait for input field to be ready for new message.
-        
-        Args:
-            timeout: Optional timeout override
-            
-        Returns:
-            True if input is ready, False otherwise
-        """
-        try:
-            wait_timeout = timeout or settings.DEFAULT_TIMEOUT
-            wait = WebDriverWait(self.driver, wait_timeout, poll_frequency=settings.POLLING_INTERVAL)
-            wait.until(EC.element_to_be_clickable(self.CHAT_INPUT_SELECTOR))
-            return True
-        except Exception:
-            return False
-
+    def send_keys(self, locator, text: str, timeout: int = None) -> None:
+        """Send text to input element (for compatibility with tests)."""
+        element = self.find_element(locator, timeout)
+        self._type_text(element, text)
