@@ -5,7 +5,8 @@ pytest-xdist==3.5.0
 pytest-timeout>=2.2.0
 
 # Browser automation
-playwright==1.40.0
+selenium==4.15.2
+webdriver-manager==4.0.1
 
 # Reporting
 allure-pytest==2.13.2
@@ -14,7 +15,7 @@ allure-pytest==2.13.2
 python-dotenv==1.0.0
 
 # Utilities
-Pillow==10.1.0
+
 
 # Optional: API testing (if you need backend validation)
 # requests>=2.31.0
