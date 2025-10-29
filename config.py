@@ -14,6 +14,7 @@ DATA_DIR = BASE_DIR / "data"
 REPORTS_DIR = BASE_DIR / "reports"
 SCREENSHOTS_DIR = REPORTS_DIR / "screenshots"
 LOGS_DIR = REPORTS_DIR / "logs"
+SESSION_FILE = BASE_DIR / "session.json"  # File to save browser session (cookies)
 
 # Create directories if they don't exist
 SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)

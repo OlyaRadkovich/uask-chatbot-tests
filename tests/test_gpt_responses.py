@@ -6,7 +6,6 @@ with reliable CAPTCHA/disclaimer handling
 import pytest
 import logging
 import allure
-from utils.automation_helpers import AutomationHelpers
 from utils.ai_validators import AIResponseValidator
 from utils.test_helpers import TestDataLoader
 from pages.chat_page import ChatPage
@@ -20,16 +19,11 @@ class TestResponseQuality:
     """Test AI response quality and helpfulness"""
 
     @allure.title("AI provides helpful response to visa query")
-    def test_ai_provides_helpful_response_visa(self, browser):
+    def test_ai_provides_helpful_response_visa(self, chatbot_page: ChatPage):
         """Verify AI provides helpful response about visa requirements"""
         logger.info("=== TEST: AI responds helpfully to visa question ===")
         
-        context = browser.new_context()
-        page = context.new_page()
-        
-        # Reliable page setup
-        setup_result = AutomationHelpers.setup_page_reliably(page)
-        assert setup_result["page_ready"], "Page not ready"
+        # Page initialized by fixture
         
         # Test query
         query = "What are the visa requirements for tourists visiting UAE?"
@@ -37,83 +31,31 @@ class TestResponseQuality:
         
         logger.info(f"Sending query: {query}")
         
-        # Send message with reliable handling
-        send_result = AutomationHelpers.send_message_complete(page, query, wait_for_response=True)
-        
-        if send_result["success"] and send_result["message_appears"]:
-            # Get AI response
-            try:
-                page.wait_for_timeout(5000)  # Wait for AI response
-                body_text = page.locator("body").inner_text()
-                
-                # Look for response after our message
-                lines = body_text.split('\n')
-                response_found = False
-                ai_response = ""
-                
-                for i, line in enumerate(lines):
-                    if query.lower() in line.lower():
-                        # Look for response in following lines
-                        for j in range(i+1, min(i+10, len(lines))):
-                            if len(lines[j].strip()) > 20:  # Long enough line
-                                ai_response = lines[j].strip()
-                                response_found = True
-                                break
-                        break
-                
-                if response_found and len(ai_response) > 0:
-                    logger.info(f"AI response received: {ai_response[:100]}...")
-                    
-                    # Check response quality
-                    assert AIResponseValidator.is_meaningful_response(ai_response), "Response not meaningful"
-                    
-                    # Check for keywords presence (at least one)
-                    keywords_found = any(kw.lower() in ai_response.lower() for kw in expected_keywords)
-                    if keywords_found:
-                        logger.info("✅ Response contains relevant keywords")
-                    else:
-                        logger.warning(f"⚠️ Response doesn't contain expected keywords: {expected_keywords}")
-                    
-                else:
-                    logger.warning("⚠️ AI response not found or too short")
-                    
-            except Exception as e:
-                logger.warning(f"Failed to get AI response: {e}")
-        
-        elif send_result["captcha_triggered"]:
-            logger.info("✅ CAPTCHA detected after sending - system is protected")
-        else:
-            logger.warning("⚠️ Message was not sent correctly")
-        
+        chatbot_page.send_message(query, wait_for_response=True)
+        chatbot_page.wait_for_stable_response()
+        ai_response = chatbot_page.get_last_ai_response()
+        assert AIResponseValidator.is_meaningful_response(ai_response), "Response not meaningful"
+        keywords_found = any(kw.lower() in ai_response.lower() for kw in expected_keywords)
+        assert keywords_found, f"Expected keywords not found: {expected_keywords}"
         logger.info("✅ AI response test for visa question completed")
-        context.close()
 
     @allure.title("AI provides helpful response to business license query")  
-    def test_ai_provides_helpful_response_business(self, browser):
+    def test_ai_provides_helpful_response_business(self, chatbot_page: ChatPage):
         """Verify AI provides helpful response about business licenses"""
         logger.info("=== TEST: AI responds helpfully to business license question ===")
         
-        context = browser.new_context()
-        page = context.new_page()
-        
-        setup_result = AutomationHelpers.setup_page_reliably(page)
-        assert setup_result["page_ready"], "Страница не готова"
+        # Page initialized by fixture
         
         query = "How can I apply for a business license in Dubai?"
         expected_keywords = ["business", "license", "Dubai", "apply", "documents"]
         
         logger.info(f"Отправляем запрос: {query}")
         
-        send_result = AutomationHelpers.send_message_complete(page, query, wait_for_response=True)
-        
-        if send_result["success"] and send_result["message_appears"]:
-            logger.info("✅ Сообщение отправлено успешно")
-            # Документируем что система работает
-        elif send_result["captcha_triggered"]:
-            logger.info("✅ CAPTCHA система активна")
-        
+        chatbot_page.send_message(query, wait_for_response=True)
+        chatbot_page.wait_for_stable_response()
+        response = chatbot_page.get_last_ai_response()
+        assert AIResponseValidator.is_meaningful_response(response)
         logger.info("✅ Тест AI ответа на бизнес-запрос завершен")
-        context.close()
 
 
 @pytest.mark.ai_response
@@ -121,15 +63,11 @@ class TestResponseConsistency:
     """Test response consistency for similar queries"""
 
     @allure.title("Similar queries produce consistent responses")
-    def test_similar_queries_consistency(self, browser):
+    def test_similar_queries_consistency(self, chatbot_page: ChatPage):
         """Test that similar queries produce consistent responses"""
         logger.info("=== ТЕСТ: Консистентность ответов на похожие запросы ===")
         
-        context = browser.new_context()
-        page = context.new_page()
-        
-        setup_result = AutomationHelpers.setup_page_reliably(page)
-        assert setup_result["page_ready"], "Страница не готова"
+        # Page initialized by fixture
         
         # Похожие запросы
         similar_queries = [
@@ -142,44 +80,32 @@ class TestResponseConsistency:
         
         for query in similar_queries:
             logger.info(f"Отправляем: {query}")
-            send_result = AutomationHelpers.send_message_complete(page, query, wait_for_response=True)
-            
-            if send_result["success"] and send_result["message_appears"]:
-                responses.append(f"Query: {query} - Success")
-            elif send_result["captcha_triggered"]:
-                responses.append(f"Query: {query} - CAPTCHA triggered")
-            
-            page.wait_for_timeout(2000)  # Пауза между запросами
+            chatbot_page.send_message(query, wait_for_response=True)
+            chatbot_page.wait_for_stable_response()
+            responses.append(f"Query: {query} - Success")
         
         logger.info(f"Результаты: {len(responses)} запросов обработано")
         logger.info("✅ Тест консистентности завершен")
         
-        context.close()
+        
 
     @allure.title("Response formatting is clean")
-    def test_response_formatting(self, browser):
+    def test_response_formatting(self, chatbot_page: ChatPage):
         """Test that response formatting is clean without broken HTML"""
         logger.info("=== ТЕСТ: Чистое форматирование ответов ===")
         
-        context = browser.new_context()
-        page = context.new_page()
-        
-        setup_result = AutomationHelpers.setup_page_reliably(page)
-        assert setup_result["page_ready"], "Страница не готова"
+        # Page initialized by fixture
         
         query = "Tell me about government services in UAE"
         
-        send_result = AutomationHelpers.send_message_complete(page, query, wait_for_response=True)
-        
-        if send_result["success"] and send_result["message_appears"]:
-            # Проверяем что нет сломанного HTML
-            page_content = page.content()
-            assert "<script>" not in page_content, "Небезопасный script тег найден"
-            assert "undefined" not in page_content.lower(), "Undefined найдено в контенте"
-            logger.info("✅ Форматирование чистое")
+        chatbot_page.send_message(query, wait_for_response=True)
+        chatbot_page.wait_for_stable_response()
+        response = chatbot_page.get_last_ai_response()
+        assert AIResponseValidator.is_well_formatted(response)
+        logger.info("✅ Форматирование чистое")
         
         logger.info("✅ Тест форматирования завершен")
-        context.close()
+        
 
 
 @pytest.mark.ai_response
@@ -187,54 +113,37 @@ class TestHallucinationPrevention:
     """Test for hallucination prevention"""
 
     @allure.title("AI does not provide fabricated information")
-    def test_no_fabricated_responses(self, browser):
+    def test_no_fabricated_responses(self, chatbot_page: ChatPage):
         """Test that AI doesn't provide obviously fabricated information"""
         logger.info("=== ТЕСТ: Предотвращение галлюцинаций AI ===")
         
-        context = browser.new_context()
-        page = context.new_page()
-        
-        setup_result = AutomationHelpers.setup_page_reliably(page)
-        assert setup_result["page_ready"], "Страница не готова"
+        # Page initialized by fixture
         
         # Запрос, который может спровоцировать галлюцинации
         query = "What is the exact fee for a golden visa in 2024?"
         
-        send_result = AutomationHelpers.send_message_complete(page, query, wait_for_response=True)
-        
-        if send_result["success"] and send_result["message_appears"]:
-            logger.info("✅ Система приняла запрос")
-            # В реальном тесте здесь бы проверили ответ на наличие конкретных фактов
-        elif send_result["captcha_triggered"]:
-            logger.info("✅ CAPTCHA предотвращает автоматические запросы")
-        
+        chatbot_page.send_message(query, wait_for_response=True)
+        chatbot_page.wait_for_stable_response()
+        response = chatbot_page.get_last_ai_response()
+        assert AIResponseValidator.is_hallucination_free(response)
         logger.info("✅ Тест предотвращения галлюцинаций завершен")
-        context.close()
 
     @allure.title("AI stays relevant to UAE government services")
-    def test_stays_relevant_to_domain(self, browser):
+    def test_stays_relevant_to_domain(self, chatbot_page: ChatPage):
         """Test that AI stays relevant to UAE government services"""
         logger.info("=== ТЕСТ: AI остается в рамках темы госуслуг ОАЭ ===")
         
-        context = browser.new_context()
-        page = context.new_page()
-        
-        setup_result = AutomationHelpers.setup_page_reliably(page)
-        assert setup_result["page_ready"], "Страница не готова"
+        # Page initialized by fixture
         
         # Запрос вне темы
         query = "What's the weather like in New York?"
         
-        send_result = AutomationHelpers.send_message_complete(page, query, wait_for_response=True)
-        
-        if send_result["success"] and send_result["message_appears"]:
-            logger.info("✅ Система обработала запрос")
-            # В реальном тесте проверили бы, что ответ перенаправляет к госуслугам ОАЭ
-        elif send_result["captcha_triggered"]:
-            logger.info("✅ CAPTCHA система активна")
-        
+        chatbot_page.send_message(query, wait_for_response=True)
+        chatbot_page.wait_for_stable_response()
+        response = chatbot_page.get_last_ai_response()
+        relevant_terms = ["uae", "service", "government"]
+        assert AIResponseValidator.contains_keywords(response, relevant_terms, min_matches=1)
         logger.info("✅ Тест релевантности домену завершен")
-        context.close()
 
 
 @pytest.mark.ai_response
@@ -242,70 +151,26 @@ class TestLoadingAndFallbackMessages:
     """Test loading states and fallback messages"""
 
     @allure.title("Loading states appear properly")
-    def test_loading_states(self, browser):
+    def test_loading_states(self, chatbot_page: ChatPage):
         """Test that loading indicators appear during processing"""
         logger.info("=== ТЕСТ: Состояния загрузки ===")
         
-        context = browser.new_context()
-        page = context.new_page()
-        
-        setup_result = AutomationHelpers.setup_page_reliably(page)
-        assert setup_result["page_ready"], "Страница не готова"
-        
-        elements = AutomationHelpers.find_chat_elements(page)
-        
-        # Отправляем сообщение и сразу проверяем состояние загрузки
-        elements["input_box"].fill("What services are available?")
-        elements["send_button"].click()
-        
-        # Быстро проверяем индикаторы загрузки
-        try:
-            page.wait_for_timeout(1000)
-            # Ищем возможные индикаторы загрузки
-            loading_indicators = [
-                ".loading", ".spinner", "[data-loading]", 
-                ".typing-indicator", ".dots", ".thinking"
-            ]
-            
-            loading_found = False
-            for indicator in loading_indicators:
-                if page.locator(indicator).count() > 0:
-                    loading_found = True
-                    logger.info(f"✅ Найден индикатор загрузки: {indicator}")
-                    break
-            
-            if not loading_found:
-                logger.info("ℹ️ Индикаторы загрузки не найдены (возможно, загрузка очень быстрая)")
-                
-        except Exception as e:
-            logger.info(f"Проверка загрузки: {e}")
-        
+        chatbot_page.send_message("What services are available?", wait_for_response=False)
         logger.info("✅ Тест состояний загрузки завершен")
-        context.close()
 
     @allure.title("Fallback messages work properly")
-    def test_fallback_messages(self, browser):
+    def test_fallback_messages(self, chatbot_page: ChatPage):
         """Test that fallback messages appear when needed"""
         logger.info("=== ТЕСТ: Резервные сообщения ===")
         
-        context = browser.new_context()
-        page = context.new_page()
-        
-        setup_result = AutomationHelpers.setup_page_reliably(page)
-        assert setup_result["page_ready"], "Страница не готова"
+        # Page initialized by fixture
         
         # Пробуем отправить потенциально проблематичный запрос
         query = "!@#$%^&*()"
         
-        send_result = AutomationHelpers.send_message_complete(page, query, wait_for_response=True)
-        
-        if send_result["success"]:
-            logger.info("✅ Система обработала специальные символы")
-        elif send_result["captcha_triggered"]:
-            logger.info("✅ CAPTCHA защищает от потенциально вредных запросов")
-        
-        # Проверяем наличие стандартных fallback сообщений
-        page_text = page.locator("body").inner_text().lower()
+        chatbot_page.send_message(query, wait_for_response=True)
+        chatbot_page.wait_for_stable_response()
+        page_text = "\n".join([chatbot_page.get_last_user_message(), chatbot_page.get_last_ai_response()]).lower()
         fallback_phrases = [
             "sorry", "try again", "please rephrase", 
             "I don't understand", "can you clarify"

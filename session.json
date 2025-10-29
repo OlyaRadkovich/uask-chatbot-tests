@@ -1,0 +1,74 @@
+{
+  "cookies": [
+    {
+      "domain": ".u.ae",
+      "expiry": 1796331407,
+      "httpOnly": false,
+      "name": "_ga_CJ93077EMN",
+      "path": "/",
+      "sameSite": "Lax",
+      "secure": false,
+      "value": "GS2.1.s1761771404$o1$g1$t1761771407$j57$l0$h0"
+    },
+    {
+      "domain": ".ask.u.ae",
+      "httpOnly": false,
+      "name": "lang",
+      "path": "/",
+      "sameSite": "Lax",
+      "secure": true,
+      "value": "en"
+    },
+    {
+      "domain": ".u.ae",
+      "expiry": 1796331407,
+      "httpOnly": false,
+      "name": "_ga",
+      "path": "/",
+      "sameSite": "Lax",
+      "secure": false,
+      "value": "GA1.1.2012515597.1761771404"
+    },
+    {
+      "domain": ".ask.u.ae",
+      "httpOnly": true,
+      "name": "ARRAffinitySameSite",
+      "path": "/",
+      "sameSite": "None",
+      "secure": true,
+      "value": "f5c6c911f7848d3dac0ab02432c452e24c750420b00c500e02db159e43d4a071"
+    },
+    {
+      "domain": ".ask.u.ae",
+      "expiry": 1769717862,
+      "httpOnly": true,
+      "name": "disc",
+      "path": "/",
+      "sameSite": "Strict",
+      "secure": true,
+      "value": "accepted"
+    },
+    {
+      "domain": ".ask.u.ae",
+      "httpOnly": true,
+      "name": "ARRAffinity",
+      "path": "/",
+      "sameSite": "Lax",
+      "secure": true,
+      "value": "f5c6c911f7848d3dac0ab02432c452e24c750420b00c500e02db159e43d4a071"
+    },
+    {
+      "domain": "ask.u.ae",
+      "httpOnly": false,
+      "name": "lang",
+      "path": "/",
+      "sameSite": "Lax",
+      "secure": false,
+      "value": "en"
+    }
+  ],
+  "local_storage": {
+    "_grecaptcha": "09ADiQh0cyQE2a1v72M2zcgIx8PKXfCw-_pGz0zo4EMJwPFoQEYlGZwyHN1hgtca6c_Gldmdm77hpMBJgGwlTEvpyIraZDegqk1i84bj7Hd8stsUYXLHM3xEbr2XIeE9R4"
+  },
+  "url": "https://ask.u.ae/en/"
+}
