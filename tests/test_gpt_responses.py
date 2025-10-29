@@ -6,8 +6,8 @@ with reliable CAPTCHA/disclaimer handling
 import pytest
 import logging
 import allure
-from utils.ai_validators import AIResponseValidator
-from utils.test_helpers import TestDataLoader
+from utils.ai_checks import AIResponseValidator
+from utils.test_toolkit import TestDataLoader
 from pages.chat_page import ChatPage
 import json
 
@@ -19,7 +19,7 @@ class TestResponseQuality:
     """Test AI response quality and helpfulness"""
 
     @allure.title("AI provides helpful response to visa query")
-    def test_ai_provides_helpful_response_visa(self, chatbot_page: ChatPage):
+    def test_resp_helpful_visa(self, chatbot_page: ChatPage):
         """Verify AI provides helpful response about visa requirements"""
         logger.info("=== TEST: AI responds helpfully to visa question ===")
         
@@ -40,7 +40,7 @@ class TestResponseQuality:
         logger.info("✅ AI response test for visa question completed")
 
     @allure.title("AI provides helpful response to business license query")  
-    def test_ai_provides_helpful_response_business(self, chatbot_page: ChatPage):
+    def test_resp_helpful_business(self, chatbot_page: ChatPage):
         """Verify AI provides helpful response about business licenses"""
         logger.info("=== TEST: AI responds helpfully to business license question ===")
         
@@ -63,7 +63,7 @@ class TestResponseConsistency:
     """Test response consistency for similar queries"""
 
     @allure.title("Similar queries produce consistent responses")
-    def test_similar_queries_consistency(self, chatbot_page: ChatPage):
+    def test_resp_similar_queries_consistency(self, chatbot_page: ChatPage):
         """Test that similar queries produce consistent responses"""
         logger.info("=== ТЕСТ: Консистентность ответов на похожие запросы ===")
         
@@ -90,7 +90,7 @@ class TestResponseConsistency:
         
 
     @allure.title("Response formatting is clean")
-    def test_response_formatting(self, chatbot_page: ChatPage):
+    def test_resp_formatting_clean(self, chatbot_page: ChatPage):
         """Test that response formatting is clean without broken HTML"""
         logger.info("=== ТЕСТ: Чистое форматирование ответов ===")
         
@@ -113,7 +113,7 @@ class TestHallucinationPrevention:
     """Test for hallucination prevention"""
 
     @allure.title("AI does not provide fabricated information")
-    def test_no_fabricated_responses(self, chatbot_page: ChatPage):
+    def test_resp_no_fabrication(self, chatbot_page: ChatPage):
         """Test that AI doesn't provide obviously fabricated information"""
         logger.info("=== ТЕСТ: Предотвращение галлюцинаций AI ===")
         
@@ -129,7 +129,7 @@ class TestHallucinationPrevention:
         logger.info("✅ Тест предотвращения галлюцинаций завершен")
 
     @allure.title("AI stays relevant to UAE government services")
-    def test_stays_relevant_to_domain(self, chatbot_page: ChatPage):
+    def test_resp_relevant_to_domain(self, chatbot_page: ChatPage):
         """Test that AI stays relevant to UAE government services"""
         logger.info("=== ТЕСТ: AI остается в рамках темы госуслуг ОАЭ ===")
         
@@ -151,7 +151,7 @@ class TestLoadingAndFallbackMessages:
     """Test loading states and fallback messages"""
 
     @allure.title("Loading states appear properly")
-    def test_loading_states(self, chatbot_page: ChatPage):
+    def test_resp_loading_states(self, chatbot_page: ChatPage):
         """Test that loading indicators appear during processing"""
         logger.info("=== ТЕСТ: Состояния загрузки ===")
         
@@ -159,7 +159,7 @@ class TestLoadingAndFallbackMessages:
         logger.info("✅ Тест состояний загрузки завершен")
 
     @allure.title("Fallback messages work properly")
-    def test_fallback_messages(self, chatbot_page: ChatPage):
+    def test_resp_fallback_messages(self, chatbot_page: ChatPage):
         """Test that fallback messages appear when needed"""
         logger.info("=== ТЕСТ: Резервные сообщения ===")
         
@@ -185,7 +185,7 @@ class TestLoadingAndFallbackMessages:
         context.close()
 
     @pytest.mark.parametrize("query_data", TestDataLoader.get_queries_by_language("ar"))
-    def test_ai_provides_helpful_response_ar(
+    def test_resp_helpful_ar(
         self,
         chatbot_page: ChatPage,
         query_data: dict,
@@ -222,7 +222,7 @@ class TestLoadingAndFallbackMessages:
 class TestHallucinationPrevention:
     """Test that AI does not hallucinate (fabricate or provide irrelevant info)"""
 
-    def test_response_is_not_hallucinated(self, chatbot_page: ChatPage, test_language: str):
+    def test_resp_no_hallucination(self, chatbot_page: ChatPage, test_language: str):
         """Verify responses are not fabricated or irrelevant"""
         logger.info("Testing hallucination prevention")
 
@@ -242,7 +242,7 @@ class TestHallucinationPrevention:
             assert is_valid, \
                 f"Response may contain hallucination for query: {query}. Response: {response[:200]}"
 
-    def test_response_stays_on_topic(self, chatbot_page: ChatPage):
+    def test_resp_stays_on_topic(self, chatbot_page: ChatPage):
         """Verify AI stays on topic and doesn't go off on tangents"""
         logger.info("Testing on-topic responses")
 
@@ -265,7 +265,7 @@ class TestHallucinationPrevention:
 class TestResponseConsistency:
     """Test that responses stay consistent for similar intents"""
 
-    def test_consistency_across_languages(self, chatbot_page: ChatPage, test_language: str):
+    def test_resp_consistency_across_languages(self, chatbot_page: ChatPage, test_language: str):
         """Test that similar questions in different languages get semantically similar answers"""
         logger.info("Testing cross-language consistency")
 
@@ -292,7 +292,7 @@ class TestResponseConsistency:
         assert similarity >= 0.3, \
             f"Responses are too different. Similarity: {similarity:.2f}"
 
-    def test_similar_questions_get_similar_answers(self, chatbot_page: ChatPage, test_language: str):
+    def test_resp_similar_questions_answers(self, chatbot_page: ChatPage, test_language: str):
         """Test that rephrased questions get similar answers"""
         logger.info("Testing consistency for similar questions")
 
@@ -333,7 +333,7 @@ class TestResponseConsistency:
 class TestResponseFormatting:
     """Test response formatting and completeness"""
 
-    def test_response_formatting_is_clean(self, chatbot_page: ChatPage, test_language: str):
+    def test_resp_formatting_is_clean(self, chatbot_page: ChatPage, test_language: str):
         """Verify response formatting is clean (no broken HTML or incomplete thoughts)"""
         logger.info("Testing response formatting")
 
@@ -353,7 +353,7 @@ class TestResponseFormatting:
             assert is_well_formatted, \
                 f"Response has formatting issues for query: {query}. Response: {response[:200]}"
 
-    def test_response_is_complete(self, chatbot_page: ChatPage):
+    def test_resp_complete(self, chatbot_page: ChatPage):
         """Verify responses are complete (not cut off mid-sentence)"""
         logger.info("Testing response completeness")
 
@@ -377,7 +377,7 @@ class TestResponseFormatting:
 class TestLoadingAndFallbackMessages:
     """Test loading states and fallback messages"""
 
-    def test_fallback_message_for_unclear_query(self, chatbot_page: ChatPage):
+    def test_resp_fallback_for_unclear(self, chatbot_page: ChatPage):
         """Verify fallback messages appear for unclear/nonsensical queries"""
         logger.info("Testing fallback messages")
 
@@ -402,7 +402,7 @@ class TestLoadingAndFallbackMessages:
             except Exception as e:
                 logger.warning(f"Error handling unclear query: {e}")
 
-    def test_response_within_reasonable_time(self, chatbot_page: ChatPage):
+    def test_resp_within_reasonable_time(self, chatbot_page: ChatPage):
         """Verify AI responds within reasonable time"""
         import time
 
@@ -430,7 +430,7 @@ class TestLoadingAndFallbackMessages:
 class TestComprehensiveValidation:
     """Comprehensive validation of AI responses"""
 
-    def test_comprehensive_response_validation(self, chatbot_page: ChatPage, test_language: str):
+    def test_resp_comprehensive_validation(self, chatbot_page: ChatPage, test_language: str):
         """Run comprehensive validation on multiple queries"""
         logger.info("Running comprehensive validation")
 

@@ -1,24 +1,12 @@
-# U-Ask QA Automation Framework
+## AskBot E2E Tests
 
-**Case Study Implementation**: AI/ML QA Automation framework for testing the U-Ask UAE Government Chatbot (https://ask.u.ae/en/)
+Lightweight Selenium-based end‑to‑end test suite for `ask.u.ae` chatbot.
 
-## Overview
-
-This framework provides comprehensive end-to-end automated testing for the U-Ask AI chatbot according to the technical specification requirements, covering three main test categories:
-
-**A. Chatbot UI Behavior** - User interface interactions and responsiveness
-**B. GPT-Powered Response Validation** - AI response quality and consistency  
-**C. Security & Injection Handling** - XSS, prompt injection, and jailbreak resistance
-
-## Key Features
-
-- **🛡️ CAPTCHA/Disclaimer Handling**: Robust solution for Google reCAPTCHA v2 and disclaimer modals
-- **🔄 Reliable Test Execution**: AutomationHelpers class with fallback mechanisms
-- **🌐 Multilingual Support**: English (LTR) and Arabic (RTL) testing
-- **🔒 Security Testing**: Comprehensive XSS, prompt injection, and SQL injection validation
-- **📊 AI Response Validation**: Hallucination detection, keyword matching, semantic consistency
-- **📱 Cross-Platform**: Desktop and mobile responsive testing
-- **📈 Allure Reporting**: Professional test reports with screenshots and logs
+### Highlights
+- Selenium WebDriver + Pytest
+- Explicit waits and resilient selectors
+- Manual CAPTCHA flow supported (see below)
+- English/Arabic coverage
 
 ## Technical Specification Implementation
 
@@ -45,34 +33,11 @@ This framework provides comprehensive end-to-end automated testing for the U-Ask
 - SQL injection prevention
 - Input validation security
 
-### CAPTCHA/Disclaimer Solution
+### Manual CAPTCHA
+- Tests detect reCAPTCHA/modal and pause for manual solve.
+- After solving, cookies/localStorage are saved (`session_v2.json`), next runs reuse the session.
 
-The framework includes a comprehensive solution for handling Google reCAPTCHA v2 and disclaimer modals:
-
-**AutomationHelpers Class** (`utils/automation_helpers.py`):
-- `setup_page_reliably()` - Handles page setup with CAPTCHA/disclaimer detection
-- `close_disclaimer_reliably()` - Closes disclaimer modals with 12+ fallback selectors
-- `close_captcha_modals()` - Handles modal CAPTCHA windows
-- `send_message_complete()` - Reliable message sending with validation
-- `find_chat_elements()` - Robust element detection with fallbacks
-
-**Key Features**:
-- ✅ Multiple disclaimer selector fallbacks for reliability
-- ✅ Modal CAPTCHA detection and handling  
-- ✅ Graceful CAPTCHA documentation (compliance over bypass)
-- ✅ Automatic retry mechanisms with exponential backoff
-- ✅ Comprehensive logging for debugging
-
-## ⚠️ **IMPORTANT: Manual CAPTCHA Solving Required**
-
-**This framework implements a DESIGN DECISION to require manual CAPTCHA solving:**
-
-🔴 **CAPTCHA Detection**: When tests encounter reCAPTCHA v2, they will:
-1. **Stop execution** and wait for manual user intervention
-2. **Display notification**: "🔴 CAPTCHA detected - manual solution required"
-3. **Show instructions**: "👆 Solve CAPTCHA in browser"
-4. **Wait for completion**: Tests pause with 30-second timeout and 5-second polling
-5. **Continue automatically**: Once solved, shows "✅ CAPTCHA SOLVED! Continuing test..."
+> Note: CAPTCHA is handled manually by design. The run will log a message and wait up to the configured timeout for you to solve it in the browser window.
 
 ### Why Manual CAPTCHA Solving?
 
@@ -81,20 +46,12 @@ The framework includes a comprehensive solution for handling Google reCAPTCHA v2
 **✅ Real-World Simulation**: Tests user experience including security checkpoints  
 **✅ Professional Standards**: Shows proper QA methodology following website policies
 
-### How It Works During Test Execution
-
+### Quickstart
 ```bash
-# Normal test execution
-pytest tests/test_ui_behavior.py -v
-
-# If CAPTCHA appears, you'll see:
-[INFO] Setting up page reliably...
-[WARNING] 🔴 CAPTCHA detected - manual solution required
-[INFO] 👆 Solve CAPTCHA in browser
-[INFO] ⏳ Waiting for manual CAPTCHA solution... (timeout: 30s)
-# >>> SOLVE CAPTCHA IN BROWSER NOW <<<
-[INFO] ✅ CAPTCHA SOLVED! Continuing test...
-[INFO] ✅ Test execution resumed
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest -q
 ```
 
 **User Action Required**: When the framework detects CAPTCHA:
@@ -111,31 +68,14 @@ The CAPTCHA handling behavior can be configured in `utils/automation_helpers.py`
 - **Notifications**: Console messages guide user through process
 - **Automatic continuation**: Tests resume without user interaction after solving
 
-## Project Structure
-
+### Structure (simplified)
 ```
-.
-├── tests/                          # Test Implementation (Tech Spec)
-│   ├── test_ui_behavior.py        # A. Chatbot UI Behavior
-│   ├── test_gpt_responses.py      # B. GPT-Powered Response Validation  
-│   └── test_security.py           # C. Security & Injection Handling
-├── utils/                          # Core Framework
-│   ├── automation_helpers.py      # 🛡️ CAPTCHA/Disclaimer Solution
-│   ├── ai_validators.py           # AI response validation
-│   ├── logger.py                  # Logging configuration
-│   └── browser_config.py          # Browser stealth configuration
-├── pages/                          # Page Object Models
-│   └── chat_page.py               # Chatbot page interactions
-├── data/
-│   └── test-data.json             # Test scenarios and security payloads
-├── reports/                        # Test Results & Artifacts
-│   ├── allure-report/             # Interactive HTML reports
-│   ├── screenshots/               # Failure screenshots
-│   └── logs/                      # Execution logs
-├── config.py                       # Framework configuration
-├── conftest.py                     # Pytest fixtures & setup
-├── pytest.ini                     # Test execution settings
-└── requirements.txt               # Dependencies
+tests/                # specs
+pages/                # page objects
+utils/                # helpers (sessions, logging, parsing)
+adapters/             # selenium adapters
+core/                 # domain/use-cases/services
+config.py             # settings
 ```
 
 ## Prerequisites
@@ -204,17 +144,13 @@ All tests use `AutomationHelpers` class that:
 
 **User Experience**: When CAPTCHA appears, you'll see clear instructions in the console. Simply solve it in the browser - tests continue automatically afterward!
 
-### Language-Specific Testing
-
+### Common commands
 ```bash
-# English tests
-pytest tests/ -k "en" -v
-
-# Arabic tests  
-pytest tests/ -k "ar" -v
-
-# Multilingual consistency tests
-pytest tests/test_gpt_responses.py::TestResponseConsistency -v
+make setup    # install
+make run      # all tests
+make smoke    # quick subset
+make sec      # security suite
+make report   # HTML report
 ```
 
 ### Generate Professional Reports
@@ -228,7 +164,7 @@ allure serve reports/allure-results
 pytest tests/ --html=reports/report.html --self-contained-html
 ```
 
-## Test Scenarios Coverage (Technical Specification)
+## Notes
 
 ### A. Chatbot UI Behavior (`test_ui_behavior.py`)
 
@@ -409,8 +345,7 @@ set LOG_LEVEL=DEBUG     # Windows
 - **12+ Disclaimer Selectors**: Maximum compatibility and reliability
 - **100% Success Rate**: All tests pass with CAPTCHA/disclaimer handling
 
-### Ready for Production Use
-This framework successfully demonstrates comprehensive QA automation for AI chatbot testing with robust CAPTCHA handling, security validation, and multilingual support as required by the technical specification.
+Timeouts can be tuned via `.env` (see `.env.example`). Manual CAPTCHA is expected on a fresh run; subsequent runs reuse `session_v2.json`.
 
 ---
 

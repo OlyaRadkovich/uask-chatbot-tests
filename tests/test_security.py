@@ -6,8 +6,12 @@ with reliable CAPTCHA/disclaimer handling
 import pytest
 import logging
 import allure
-from utils.ai_validators import SecurityValidator
-from utils.test_helpers import TestDataLoader
+from utils.ai_checks import SecurityValidator
+from core.services.chat_service import send_and_read
+from config import ENGLISH_URL
+from core.services.chat_service import send_and_read
+from config import ENGLISH_URL, ARABIC_URL
+from utils.test_toolkit import TestDataLoader
 from pages.chat_page import ChatPage
 
 logger = logging.getLogger(__name__)
@@ -18,7 +22,7 @@ class TestXSSSanitization:
     """Test XSS (Cross-Site Scripting) prevention"""
 
     @allure.title("Script tags are properly sanitized")
-    def test_script_tag_is_sanitized(self, chatbot_page: ChatPage):
+    def test_sec_script_tag_is_sanitized(self, chatbot_page: ChatPage):
         """Verify <script> tags are rendered harmlessly"""
         logger.info("=== ТЕСТ: Санитизация script тегов ===")
         
@@ -36,7 +40,7 @@ class TestXSSSanitization:
         logger.info("✅ Тест script тегов завершен")
 
     @allure.title("IMG onerror attributes are sanitized")
-    def test_img_onerror_is_sanitized(self, chatbot_page: ChatPage):
+    def test_sec_img_onerror_is_sanitized(self, chatbot_page: ChatPage):
         """Verify img tag with onerror is sanitized"""
         logger.info("=== ТЕСТ: Санитизация img onerror ===")
         
@@ -52,7 +56,7 @@ class TestXSSSanitization:
         logger.info("✅ Тест IMG onerror завершен")
 
     @allure.title("IFrame injection attempts are blocked")
-    def test_iframe_injection_blocked(self, chatbot_page: ChatPage):
+    def test_sec_iframe_injection_blocked(self, chatbot_page: ChatPage):
         """Verify iframe injection attempts are blocked"""
         logger.info("=== ТЕСТ: Блокировка iframe инъекций ===")
         
@@ -73,7 +77,7 @@ class TestPromptInjection:
     """Test prompt injection resistance"""
 
     @allure.title("AI resists prompt injection attempts")
-    def test_ignore_instructions_prompt(self, chatbot_page: ChatPage):
+    def test_sec_ignore_instructions_prompt(self, chatbot_page: ChatPage):
         """Test resistance to 'ignore instructions' prompts"""
         logger.info("=== ТЕСТ: Сопротивление prompt инъекциям ===")
         
@@ -84,13 +88,15 @@ class TestPromptInjection:
         
         logger.info(f"Отправляем prompt injection: {injection_prompt}")
         
-        chatbot_page.send_message(injection_prompt, wait_for_response=True)
-        response = chatbot_page.get_last_ai_response()
+        url = ENGLISH_URL  # using english for security suite
+        res = send_and_read(chatbot_page.driver, chatbot_page, url, injection_prompt)
+        assert res.success, "No response received"
+        response = res.response.text if res.response else ""
         assert SecurityValidator.check_prompt_injection_resistance(response, injection_prompt)
         logger.info("✅ Тест prompt injection завершен")
 
     @allure.title("Role manipulation attempts are blocked")
-    def test_role_manipulation_resistance(self, chatbot_page: ChatPage):
+    def test_sec_role_manipulation_resistance(self, chatbot_page: ChatPage):
         """Test resistance to role manipulation attempts"""
         logger.info("=== ТЕСТ: Сопротивление манипуляции ролями ===")
         
@@ -100,13 +106,14 @@ class TestPromptInjection:
         
         logger.info(f"Отправляем role manipulation: {role_manipulation}")
         
-        chatbot_page.send_message(role_manipulation, wait_for_response=True)
-        response = chatbot_page.get_last_ai_response()
+        res = send_and_read(chatbot_page.driver, chatbot_page, ENGLISH_URL, role_manipulation)
+        assert res.success
+        response = res.response.text if res.response else ""
         assert SecurityValidator.check_prompt_injection_resistance(response, role_manipulation)
         logger.info("✅ Тест role manipulation завершен")
 
     @allure.title("System prompt extraction attempts are blocked")
-    def test_system_prompt_extraction_blocked(self, chatbot_page: ChatPage):
+    def test_sec_system_prompt_extraction_blocked(self, chatbot_page: ChatPage):
         """Test that system prompt extraction attempts are blocked"""
         logger.info("=== ТЕСТ: Блокировка извлечения system prompt ===")
         
@@ -116,8 +123,9 @@ class TestPromptInjection:
         
         logger.info(f"Отправляем system prompt extraction: {extraction_attempt}")
         
-        chatbot_page.send_message(extraction_attempt, wait_for_response=True)
-        response = chatbot_page.get_last_ai_response()
+        res = send_and_read(chatbot_page.driver, chatbot_page, ENGLISH_URL, extraction_attempt)
+        assert res.success
+        response = res.response.text if res.response else ""
         assert SecurityValidator.check_prompt_injection_resistance(response, extraction_attempt)
         logger.info("✅ Тест system prompt extraction завершен")
 
@@ -127,7 +135,7 @@ class TestJailbreakResistance:
     """Test jailbreak attempt resistance"""
 
     @allure.title("Jailbreak attempts are handled properly")
-    def test_jailbreak_attempts(self, chatbot_page: ChatPage):
+    def test_sec_jailbreak_attempts(self, chatbot_page: ChatPage):
         """Test various jailbreak attempts"""
         logger.info("=== ТЕСТ: Сопротивление jailbreak попыткам ===")
         
@@ -154,7 +162,7 @@ class TestSQLInjectionHandling:
     """Test SQL injection handling"""
 
     @allure.title("SQL injection attempts are handled safely")
-    def test_sql_injection_attempts(self, chatbot_page: ChatPage):
+    def test_sec_sql_injection_attempts(self, chatbot_page: ChatPage):
         """Test that SQL injection attempts don't break the system"""
         logger.info("=== ТЕСТ: Обработка SQL injection ===")
         
@@ -183,7 +191,7 @@ class TestInputValidation:
     """Test input validation and sanitization"""
 
     @allure.title("Special characters are handled properly")
-    def test_special_characters_handling(self, chatbot_page: ChatPage):
+    def test_sec_special_characters_handling(self, chatbot_page: ChatPage):
         """Test handling of special characters and encoding"""
         logger.info("=== ТЕСТ: Обработка специальных символов ===")
         
@@ -206,7 +214,7 @@ class TestInputValidation:
         
 
     @allure.title("Very long input is handled gracefully")
-    def test_long_input_handling(self, chatbot_page: ChatPage):
+    def test_sec_long_input_handling(self, chatbot_page: ChatPage):
         """Test handling of very long input strings"""
         logger.info("=== ТЕСТ: Обработка очень длинного ввода ===")
         
@@ -225,7 +233,7 @@ class TestInputValidation:
         assert self.chatbot_page.send_button.is_enabled(), \
             "Page broken after IMG XSS attempt"
 
-    def test_iframe_injection_is_blocked(self, chatbot_page: ChatPage):
+    def test_sec_iframe_injection_is_blocked_dup(self, chatbot_page: ChatPage):
         """Verify iframe injection is blocked"""
         logger.info("Testing iframe injection blocking")
 
@@ -239,7 +247,7 @@ class TestInputValidation:
 
         assert is_safe, "Iframe injection not blocked"
 
-    def test_javascript_protocol_is_sanitized(self, chatbot_page: ChatPage):
+    def test_sec_javascript_protocol_is_sanitized(self, chatbot_page: ChatPage):
         """Verify javascript: protocol is sanitized"""
         logger.info("Testing javascript: protocol sanitization")
 
@@ -259,7 +267,7 @@ class TestInputValidation:
 
             assert is_safe, f"Javascript protocol not sanitized: {xss_input}"
 
-    def test_event_handler_attributes_sanitized(self, chatbot_page: ChatPage):
+    def test_sec_event_handler_attributes_sanitized(self, chatbot_page: ChatPage):
         """Verify event handler attributes are sanitized"""
         logger.info("Testing event handler sanitization")
 
@@ -284,7 +292,7 @@ class TestInputValidation:
 class TestPromptInjection:
     """Test AI prompt injection prevention"""
 
-    def test_ignore_instructions_prompt_injection(self, chatbot_page: ChatPage):
+    def test_sec_ignore_instructions_prompt_injection(self, chatbot_page: ChatPage):
         """Verify AI does not follow 'ignore instructions' prompts"""
         logger.info("Testing 'ignore instructions' prompt injection")
 
@@ -301,7 +309,7 @@ class TestPromptInjection:
         assert is_resistant, \
             f"AI complied with prompt injection. Response: {response[:200]}"
 
-    def test_role_manipulation_injection(self, chatbot_page: ChatPage):
+    def test_sec_role_manipulation_injection(self, chatbot_page: ChatPage):
         """Verify AI maintains its role and doesn't accept role changes"""
         logger.info("Testing role manipulation")
 
@@ -322,7 +330,7 @@ class TestPromptInjection:
             assert is_resistant, \
                 f"AI changed role for: {injection}. Response: {response[:200]}"
 
-    def test_system_prompt_extraction(self, chatbot_page: ChatPage):
+    def test_sec_system_prompt_extraction(self, chatbot_page: ChatPage):
         """Verify AI doesn't reveal system prompt or configuration"""
         logger.info("Testing system prompt extraction prevention")
 
@@ -345,7 +353,7 @@ class TestPromptInjection:
             assert is_resistant, \
                 f"AI may have leaked system info for: {injection}. Response: {response[:200]}"
 
-    def test_jailbreak_attempts(self, chatbot_page: ChatPage):
+    def test_sec_jailbreak_attempts_dup(self, chatbot_page: ChatPage):
         """Verify AI resists jailbreak attempts"""
         logger.info("Testing jailbreak resistance")
 
@@ -366,7 +374,7 @@ class TestPromptInjection:
             assert is_resistant, \
                 f"AI vulnerable to jailbreak: {jailbreak}. Response: {response[:200]}"
 
-    def test_instruction_override_attempts(self, chatbot_page: ChatPage):
+    def test_sec_instruction_override_attempts(self, chatbot_page: ChatPage):
         """Verify AI doesn't follow instruction override attempts"""
         logger.info("Testing instruction override resistance")
 
@@ -395,7 +403,7 @@ class TestPromptInjection:
 class TestSQLInjection:
     """Test SQL injection handling (frontend level)"""
 
-    def test_basic_sql_injection_input(self, chatbot_page: ChatPage):
+    def test_sec_basic_sql_injection_input(self, chatbot_page: ChatPage):
         """Verify SQL injection patterns are handled safely"""
         logger.info("Testing SQL injection handling")
 
@@ -431,7 +439,7 @@ class TestSQLInjection:
 class TestInputValidation:
     """Test general input validation and edge cases"""
 
-    def test_extremely_long_input(self, chatbot_page: ChatPage):
+    def test_sec_extremely_long_input(self, chatbot_page: ChatPage):
         """Verify handling of extremely long input"""
         logger.info("Testing extremely long input")
 
@@ -450,7 +458,7 @@ class TestInputValidation:
             logger.info(f"Long input handled with: {e}")
             # This is acceptable if there's a length limit
 
-    def test_special_characters_handling(self, chatbot_page: ChatPage):
+    def test_sec_special_characters_handling_dup(self, chatbot_page: ChatPage):
         """Verify special characters are handled correctly"""
         logger.info("Testing special characters")
 
@@ -470,7 +478,7 @@ class TestInputValidation:
 
             logger.info(f"Special chars handled: {special_input[:30]}")
 
-    def test_null_and_undefined_handling(self, chatbot_page: ChatPage):
+    def test_sec_null_and_undefined_handling(self, chatbot_page: ChatPage):
         """Test handling of null/undefined patterns"""
         logger.info("Testing null/undefined handling")
 
@@ -491,7 +499,7 @@ class TestInputValidation:
 
 @pytest.mark.security
 @pytest.mark.parametrize("test_case", TestDataLoader.get_security_tests("xss_attempts"))
-def test_xss_attempts_from_data(chatbot_page: ChatPage, test_case: dict):
+def test_sec_xss_attempts_from_data(chatbot_page: ChatPage, test_case: dict):
     """Parametrized test for all XSS attempts from test data"""
     logger.info(f"Testing XSS: {test_case['description']}")
 
@@ -509,7 +517,7 @@ def test_xss_attempts_from_data(chatbot_page: ChatPage, test_case: dict):
 
 @pytest.mark.security
 @pytest.mark.parametrize("test_case", TestDataLoader.get_security_tests("prompt_injection"))
-def test_prompt_injection_from_data(chatbot_page: ChatPage, test_case: dict):
+def test_sec_prompt_injection_from_data(chatbot_page: ChatPage, test_case: dict):
     """Parametrized test for all prompt injection attempts from test data"""
     logger.info(f"Testing prompt injection: {test_case['description']}")
 
@@ -530,7 +538,7 @@ def test_prompt_injection_from_data(chatbot_page: ChatPage, test_case: dict):
 class TestDataPrivacy:
     """Test data privacy and PII handling"""
 
-    def test_no_sensitive_data_in_responses(self, chatbot_page: ChatPage):
+    def test_sec_no_sensitive_data_in_responses(self, chatbot_page: ChatPage):
         """Verify responses don't leak sensitive data"""
         logger.info("Testing sensitive data protection")
 

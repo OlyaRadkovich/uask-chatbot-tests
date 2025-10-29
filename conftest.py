@@ -14,9 +14,9 @@ from config import (
     SCREENSHOTS_DIR,
     SESSION_FILE
 )
-from utils.session_manager import SessionManager
-from utils.logger import setup_logger
-from utils.test_helpers import ScreenshotHelper
+from utils.session_store import SessionManager
+from utils.log_setup import setup_logger
+from utils.test_toolkit import ScreenshotHelper
 from pages.chat_page import ChatPage
 
 logger = setup_logger(__name__)

@@ -272,32 +272,10 @@ class ChatPage:
             # Loading may be too fast, continue
             pass
 
-        # Wait for any bot message element (exclude loading container) to appear
-        bot_xpaths = [
-            # Primary: explicit message text in incoming bot message
-            (
-                "//div[contains(@class,'chat-item') and contains(@class,'chatbot') and contains(@class,'chat-message-in')]"
-                "//div[contains(@class,'chat-message-text') and not(ancestor::div[contains(@class,'chat-loading-msg')])]"
-            ),
-            # Fallback: any chat-message-text inside chatbot-container
-            (
-                "//div[contains(@class,'chatbot-container')]"
-                "//div[contains(@class,'chat-message-text') and not(ancestor::div[contains(@class,'chat-loading-msg')])]"
-            ),
-            # Fallback: any .chat-text within bot item
-            (
-                "//div[contains(@class,'chat-item') and contains(@class,'chatbot')]"
-                "//div[contains(@class,'chat-text') and not(ancestor::div[contains(@class,'chat-loading-msg')])]"
-            ),
-            # Fallback: textual paragraphs/list items inside bot item
-            (
-                "//div[contains(@class,'chat-item') and contains(@class,'chatbot')]"
-                "//*[self::p or self::li][normalize-space() and not(ancestor::div[contains(@class,'chat-loading-msg')])]"
-            ),
-        ]
-        # Wait for any of the above to be present
+        # Wait for any of the response candidates to be present
+        from utils.response_parser import BOT_TEXT_XPATHS
         WebDriverWait(self.driver, total_seconds).until(
-            lambda d: any(d.find_elements(By.XPATH, xp) for xp in bot_xpaths)
+            lambda d: any(d.find_elements(By.XPATH, xp) for xp in BOT_TEXT_XPATHS)
         )
 
         # Now wait until the last bot message has non-empty text and stabilizes
@@ -307,8 +285,9 @@ class ChatPage:
         end_time = time.time() + total_seconds
         while time.time() < end_time:
             # Gather candidates from all xpaths
+            from utils.response_parser import BOT_TEXT_XPATHS
             elems = []
-            for xp in bot_xpaths:
+            for xp in BOT_TEXT_XPATHS:
                 found = self.driver.find_elements(By.XPATH, xp)
                 if found:
                     elems.extend(found)
@@ -345,26 +324,9 @@ class ChatPage:
             pass
 
     def get_last_ai_response(self) -> str:
-        bot_xpaths = [
-            (
-                "//div[contains(@class,'chat-item') and contains(@class,'chatbot') and contains(@class,'chat-message-in')]"
-                "//div[contains(@class,'chat-message-text') and not(ancestor::div[contains(@class,'chat-loading-msg')])]"
-            ),
-            (
-                "//div[contains(@class,'chatbot-container')]"
-                "//div[contains(@class,'chat-message-text') and not(ancestor::div[contains(@class,'chat-loading-msg')])]"
-            ),
-            (
-                "//div[contains(@class,'chat-item') and contains(@class,'chatbot')]"
-                "//div[contains(@class,'chat-text') and not(ancestor::div[contains(@class,'chat-loading-msg')])]"
-            ),
-            (
-                "//div[contains(@class,'chat-item') and contains(@class,'chatbot')]"
-                "//*[self::p or self::li][normalize-space() and not(ancestor::div[contains(@class,'chat-loading-msg')])]"
-            ),
-        ]
+        from utils.response_parser import BOT_TEXT_XPATHS, get_element_text, find_last_response_element
         responses = []
-        for xp in bot_xpaths:
+        for xp in BOT_TEXT_XPATHS:
             found = self.driver.find_elements(By.XPATH, xp)
             if found:
                 responses.extend(found)
@@ -372,14 +334,7 @@ class ChatPage:
             logger.warning("No AI responses found")
             return ""
         last_el = responses[-1]
-        # Try innerText/textContent to include any HTML content rendered
-        try:
-            text = (self.driver.execute_script(
-                "return (arguments[0].innerText||arguments[0].textContent||'').trim();",
-                last_el,
-            ) or "").strip()
-        except Exception:
-            text = (last_el.text or "").strip()
+        text = get_element_text(self.driver, last_el)
         logger.info(f"Last response: {text[:100]}...")
         return text
 

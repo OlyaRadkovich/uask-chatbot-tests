@@ -1,24 +1,14 @@
-# Core testing framework
-pytest==7.4.3
-pytest-html==4.1.1
-pytest-xdist==3.5.0
-pytest-timeout>=2.2.0
+pytest~=7.4
+pytest-html~=4.1
+pytest-xdist~=3.5
+pytest-timeout~=2.2
 
-# Browser automation
-selenium==4.25.0
-webdriver-manager==4.0.2
+selenium~=4.25
 
-# Reporting
-allure-pytest==2.13.2
+allure-pytest~=2.13
+python-dotenv~=1.0
+Pillow~=10.1
 
-# Environment and configuration
-python-dotenv==1.0.0
-
-# Utilities
-Pillow==10.1.0
-
-# Optional: API testing (if you need backend validation)
-# requests>=2.31.0
-
-# Optional: Data validation
-# jsonschema>=4.21.1
+# optional extras
+# requests~=2.31
+# jsonschema~=4.21
