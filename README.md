@@ -352,7 +352,7 @@ Timeouts can be tuned via `.env` (see `.env.example`). Manual CAPTCHA is expecte
 **Framework**: U-Ask QA Automation  
 **Version**: 1.0.0 (Production)  
 **Compliance**: Technical Specification Complete  
-**Author**: Pavel Maximenko
+**Author**: Andrew Artyukhovsky
 **Created**: 2025
 ````
 
