@@ -49,13 +49,13 @@ class TestResponseQuality:
         query = "How can I apply for a business license in Dubai?"
         expected_keywords = ["business", "license", "Dubai", "apply", "documents"]
         
-        logger.info(f"Отправляем запрос: {query}")
+        logger.info(f"Sending query: {query}")
         
         chatbot_page.send_message(query, wait_for_response=True)
         chatbot_page.wait_for_stable_response()
         response = chatbot_page.get_last_ai_response()
         assert AIResponseValidator.is_meaningful_response(response)
-        logger.info("✅ Тест AI ответа на бизнес-запрос завершен")
+        logger.info("✅ Business response test completed")
 
 
 @pytest.mark.ai_response
@@ -65,11 +65,11 @@ class TestResponseConsistency:
     @allure.title("Similar queries produce consistent responses")
     def test_resp_similar_queries_consistency(self, chatbot_page: ChatPage):
         """Test that similar queries produce consistent responses"""
-        logger.info("=== ТЕСТ: Консистентность ответов на похожие запросы ===")
+        logger.info("=== TEST: Consistency on similar queries ===")
         
         # Page initialized by fixture
         
-        # Похожие запросы
+        # Similar queries
         similar_queries = [
             "How to get a driving license?",
             "What is the process for driving license application?",
@@ -79,12 +79,12 @@ class TestResponseConsistency:
         responses = []
         
         for query in similar_queries:
-            logger.info(f"Отправляем: {query}")
+            logger.info(f"Sending: {query}")
             chatbot_page.send_message(query, wait_for_response=True)
             chatbot_page.wait_for_stable_response()
             responses.append(f"Query: {query} - Success")
         
-        logger.info(f"Результаты: {len(responses)} запросов обработано")
+        logger.info(f"Results: {len(responses)} queries processed")
         logger.info("✅ Тест консистентности завершен")
         
         
@@ -92,7 +92,7 @@ class TestResponseConsistency:
     @allure.title("Response formatting is clean")
     def test_resp_formatting_clean(self, chatbot_page: ChatPage):
         """Test that response formatting is clean without broken HTML"""
-        logger.info("=== ТЕСТ: Чистое форматирование ответов ===")
+        logger.info("=== TEST: Response formatting is clean ===")
         
         # Page initialized by fixture
         
@@ -102,7 +102,7 @@ class TestResponseConsistency:
         chatbot_page.wait_for_stable_response()
         response = chatbot_page.get_last_ai_response()
         assert AIResponseValidator.is_well_formatted(response)
-        logger.info("✅ Форматирование чистое")
+        logger.info("✅ Formatting OK")
         
         logger.info("✅ Тест форматирования завершен")
         
@@ -115,7 +115,7 @@ class TestHallucinationPrevention:
     @allure.title("AI does not provide fabricated information")
     def test_resp_no_fabrication(self, chatbot_page: ChatPage):
         """Test that AI doesn't provide obviously fabricated information"""
-        logger.info("=== ТЕСТ: Предотвращение галлюцинаций AI ===")
+        logger.info("=== TEST: Hallucination prevention ===")
         
         # Page initialized by fixture
         
@@ -131,7 +131,7 @@ class TestHallucinationPrevention:
     @allure.title("AI stays relevant to UAE government services")
     def test_resp_relevant_to_domain(self, chatbot_page: ChatPage):
         """Test that AI stays relevant to UAE government services"""
-        logger.info("=== ТЕСТ: AI остается в рамках темы госуслуг ОАЭ ===")
+        logger.info("=== TEST: AI stays relevant to UAE gov services ===")
         
         # Page initialized by fixture
         
@@ -153,7 +153,7 @@ class TestLoadingAndFallbackMessages:
     @allure.title("Loading states appear properly")
     def test_resp_loading_states(self, chatbot_page: ChatPage):
         """Test that loading indicators appear during processing"""
-        logger.info("=== ТЕСТ: Состояния загрузки ===")
+        logger.info("=== TEST: Loading states ===")
         
         chatbot_page.send_message("What services are available?", wait_for_response=False)
         logger.info("✅ Тест состояний загрузки завершен")
@@ -161,11 +161,11 @@ class TestLoadingAndFallbackMessages:
     @allure.title("Fallback messages work properly")
     def test_resp_fallback_messages(self, chatbot_page: ChatPage):
         """Test that fallback messages appear when needed"""
-        logger.info("=== ТЕСТ: Резервные сообщения ===")
+        logger.info("=== TEST: Fallback messages ===")
         
         # Page initialized by fixture
         
-        # Пробуем отправить потенциально проблематичный запрос
+        # Try potentially problematic query
         query = "!@#$%^&*()"
         
         chatbot_page.send_message(query, wait_for_response=True)
@@ -178,7 +178,7 @@ class TestLoadingAndFallbackMessages:
         
         for phrase in fallback_phrases:
             if phrase in page_text:
-                logger.info(f"✅ Найдена fallback фраза: {phrase}")
+                logger.info(f"✅ Found fallback phrase: {phrase}")
                 break
         
         logger.info("✅ Тест резервных сообщений завершен")
